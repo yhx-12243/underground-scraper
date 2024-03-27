@@ -68,32 +68,32 @@ pub async fn work(id: i64, desc: String, ctx: &Context) {
 
         let hash = BuildHasherDefault::<DefaultHasher>::default().hash_one(&desc);
 
-        archived.push((hash as i64, desc, quantity, cost))
+        archived.push((hash as i64, desc, quantity, cost));
     }
 
-	if !archived.is_empty() {
-		let res: Result<(), BB8Error> = try {
-			const SQL: &str = "with tmp_insert(i, d, q, p) as (select * from unnest($1::bigint[], $4::text[], $5::bigint[], $6::float8[])) insert into accs.market (id, category, time, description, quantity, price) select i, $2, $3, d, q, p from tmp_insert";
+    if !archived.is_empty() {
+        let res: Result<(), BB8Error> = try {
+            const SQL: &str = "with tmp_insert(i, d, q, p) as (select * from unnest($1::bigint[], $4::text[], $5::bigint[], $6::float8[])) insert into accs.market (id, category, time, description, quantity, price) select i, $2, $3, d, q, p from tmp_insert";
 
-			let mut conn = get_connection().await?;
-			let stmt = conn.prepare_static(SQL.into()).await?;
-			conn.execute(
-				&stmt,
-				&[
-					&ToSqlIter(archived.iter().map(|x| x.0)),
-					&id,
-					&date,
-					&ToSqlIter(archived.iter().map(|x| &*x.1)),
-					&ToSqlIter(archived.iter().map(|x| x.2)),
-					&ToSqlIter(archived.iter().map(|x| x.3)),
-				],
-			)
-			.await?;
+            let mut conn = get_connection().await?;
+            let stmt = conn.prepare_static(SQL.into()).await?;
+            conn.execute(
+                &stmt,
+                &[
+                    &ToSqlIter(archived.iter().map(|x| x.0)),
+                    &id,
+                    &date,
+                    &ToSqlIter(archived.iter().map(|x| &*x.1)),
+                    &ToSqlIter(archived.iter().map(|x| x.2)),
+                    &ToSqlIter(archived.iter().map(|x| x.3)),
+                ],
+            )
+            .await?;
 
-			tracing::info!(target: "worker", "\x1b[36m[#{id}] update {} items\x1b[0m", archived.len());
-		};
-		if let Err(e) = res {
-			tracing::error!(target: "worker", "\x1b[31m[#{id}] db err: {e}\x1b[0m");
-		}
-	}
+            tracing::info!(target: "worker", "\x1b[36m[#{id}] update {} items\x1b[0m", archived.len());
+        };
+        if let Err(e) = res {
+            tracing::error!(target: "worker", "\x1b[31m[#{id}] db err: {e}\x1b[0m");
+        }
+    }
 }

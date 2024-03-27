@@ -46,9 +46,10 @@
     lazy_cell,
     stmt_expr_attributes,
     try_blocks,
-    yeet_expr,
+    yeet_expr
 )]
 #![cfg_attr(feature = "bt", feature(bulk_build_from_sorted_iter))]
 
 pub mod db;
 pub mod scrape;
+pub mod util;

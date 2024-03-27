@@ -42,14 +42,14 @@
 #![feature(
     allocator_api,
     inline_const,
-    iter_array_chunks,
+    iter_next_chunk,
     lazy_cell,
     stmt_expr_attributes,
     try_blocks,
-    yeet_expr,
+    yeet_expr
 )]
 
-mod scrape;
+use std::collections::VecDeque;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -60,49 +60,32 @@ async fn main() -> anyhow::Result<()> {
         .connect_timeout(const { core::time::Duration::from_secs(5) })
         .build()?;
 
-    let res = client
-        .get("https://accsmarket.com/")
-        .send()
-        .await?
-        .text()
-        .await?;
-    let html = scraper::Html::parse_document(&res);
-
-    let sel_soc_bl = scraper::Selector::parse(".soc-bl").unwrap();
-    let sel_h2 = scraper::Selector::parse("h2").unwrap();
-    let container = html
-        .select(&sel_soc_bl)
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("element not found"))?;
-
-    let ctx = scrape::Context {
-        client,
-        sel_scp: scraper::Selector::parse(".soc-text>p").unwrap(),
+    let mut ids: Vec<i64> = {
+        const SQL: &str = "select distinct id from hackforums.posts natural left outer join hackforums.content where hackforums.content.id is null order by id";
+        let mut conn = t2::db::get_connection().await?;
+        let stmt = conn.prepare_static(SQL.into()).await?;
+        conn.query(&stmt, &[])
+            .await?
+            .into_iter()
+            .filter_map(|row| row.try_get(0).ok())
+            .collect()
     };
 
-    let mut id = 0i64;
-    let mut desc = String::new();
-    let mut futs = Vec::new();
-    for child in container.child_elements() {
-        match child.attr("class") {
-            Some("soc-title") => {
-                if let Some(h2) = child.select(&sel_h2).next() {
-                    id = h2.attr("data-id").and_then(|x| x.parse().ok()).unwrap_or(0);
-                    desc = h2.text().map(str::trim).collect();
-                }
-            }
-            Some("socs") => {
-                futs.push(scrape::work(id, core::mem::take(&mut desc), &ctx));
-            }
-            e => tracing::warn!(target: "soc-bl", "Unknown class: {e:?}"),
-        }
-    }
-
-    for fut in futs {
-        fut.await;
-        tokio::time::sleep(core::time::Duration::from_millis(250)).await;
-    }
-    // futures_util::future::join_all(futs).await;
+    dbg!(ids);
 
     Ok(())
 }
+/*
+const dp = new DOMParser();
+
+async function work(id) {
+    const txt = await fetch(`https://hackforums.net/showthread.php?tid=${id}`).then(x => x.text());
+    const doc = dp.parseFromString(txt, 'text/html');
+    const div = doc.querySelector('.post_content');
+    const [head, body] = div.children;
+    const date_str = head.querySelector('.post_date').firstChild.textContent;
+    const date = new Date(`${date_str}Z`);
+    const content = body.textContent;
+    return [date, content];
+}
+*/

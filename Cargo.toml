@@ -39,6 +39,10 @@ path = "src/accsmarket/main.rs"
 name = "hackforums"
 path = "src/hackforums/main.rs"
 
+[[bin]]
+name = "hackforums-inner"
+path = "src/hackforums-inner/main.rs"
+
 [lib]
 name = "t2"
 path = "src/lib.rs"

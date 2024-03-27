@@ -49,7 +49,6 @@
     try_blocks,
     yeet_expr,
 )]
-#![cfg_attr(feature = "bt", feature(bulk_build_from_sorted_iter))]
 
 mod scrape;
 
@@ -58,16 +57,13 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
     t2::db::init_db().await;
 
-    // let client = reqwest::Client::builder()
-    //     .connect_timeout(const { core::time::Duration::from_secs(5) })
-    //     .build()?;
-
     let driver = t2::scrape::get_driver(false).await?;
 
-    let sel_content_tr = scraper::Selector::parse("tr").unwrap();
-    let sel_subject_old = scraper::Selector::parse(".subject_old,.subject_new").unwrap();
-
-    let ctx = scrape::Context { driver, sel_content_tr, sel_subject_old };
+    let ctx = scrape::Context {
+        driver,
+        sel_content_tr: scraper::Selector::parse("tr").unwrap(),
+        sel_subject_old: scraper::Selector::parse(".subject_old,.subject_new").unwrap(),
+    };
 
     let mut res = Vec::new();
     for i in 1..=558 {
@@ -76,32 +72,32 @@ async fn main() -> anyhow::Result<()> {
         tokio::time::sleep(const { core::time::Duration::from_millis(500) }).await;
     }
 
-	if !res.is_empty() {
+    if !res.is_empty() {
         use t2::db::{get_connection, BB8Error, ToSqlIter};
 
-		let res: Result<(), BB8Error> = try {
-			const SQL: &str = "with tmp_insert(i, t, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::bigint[], $4::bigint[], $5::timestamp[])) insert into hackforums.posts (id, title, replies, views, lastpost, time) select i, t, r, v, l, now() at time zone 'UTC' from tmp_insert";
+        let res: Result<(), BB8Error> = try {
+            const SQL: &str = "with tmp_insert(i, t, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::bigint[], $4::bigint[], $5::timestamp[])) insert into hackforums.posts (id, title, replies, views, lastpost, time) select i, t, r, v, l, now() at time zone 'UTC' from tmp_insert";
 
-			let mut conn = get_connection().await?;
-			let stmt = conn.prepare_static(SQL.into()).await?;
-			conn.execute(
-				&stmt,
-				&[
-					&ToSqlIter(res.iter().map(|x| x.tid)),
-					&ToSqlIter(res.iter().map(|x| &*x.title)),
-					&ToSqlIter(res.iter().map(|x| x.replies)),
-					&ToSqlIter(res.iter().map(|x| x.views)),
-					&ToSqlIter(res.iter().map(|x| x.lastPost)),
-				],
-			)
-			.await?;
+            let mut conn = get_connection().await?;
+            let stmt = conn.prepare_static(SQL.into()).await?;
+            conn.execute(
+                &stmt,
+                &[
+                    &ToSqlIter(res.iter().map(|x| x.tid)),
+                    &ToSqlIter(res.iter().map(|x| &*x.title)),
+                    &ToSqlIter(res.iter().map(|x| x.replies)),
+                    &ToSqlIter(res.iter().map(|x| x.views)),
+                    &ToSqlIter(res.iter().map(|x| x.lastPost)),
+                ],
+            )
+            .await?;
 
-			tracing::info!(target: "db", "\x1b[36mupdate {} items\x1b[0m", res.len());
-		};
-		if let Err(e) = res {
-			tracing::error!(target: "db", "\x1b[31mdb err: {e}\x1b[0m");
-		}
-	}
+            tracing::info!(target: "db", "\x1b[36mupdate {} items\x1b[0m", res.len());
+        };
+        if let Err(e) = res {
+            tracing::error!(target: "db", "\x1b[31mdb err: {e}\x1b[0m");
+        }
+    }
 
     ctx.driver.close().await.map_err(Into::into)
 }
