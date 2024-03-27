@@ -2,7 +2,10 @@ use std::time::{Duration, SystemTime};
 
 use fantoccini::{Client as Driver, Locator};
 use scraper::{ElementRef, Html, Selector};
-use t2::util::simple_parse;
+use t2::{
+    db::{get_connection, BB8Error, ToSqlIter},
+    util::simple_parse,
+};
 
 pub struct Context {
     pub driver: Driver,
@@ -19,27 +22,30 @@ pub struct Thread {
     pub lastPost: SystemTime,
 }
 
-pub async fn work(page: i32, ctx: &Context) -> Vec<Thread> {
+pub async fn work(page: i32, ctx: &Context) {
     tracing::info!(target: "worker", "[Page #{page}] start");
 
-    let url = format!("https://hackforums.net/forumdisplay.php?fid=263&page={page}");
+    let url = format!(
+        // "https://hackforums.net/forumdisplay.php?fid=263&page={page}"
+        "https://hackforums.net/forumdisplay.php?fid=291&page={page}"
+    );
 
     if let Err(e) = ctx.driver.goto(&url).await {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
-        return Vec::new();
+        return;
     }
 
-    let locator = Locator::Css("#content table");
+    let locator = Locator::Css("#content table.clear");
     if let Err(e) = ctx.driver.wait().forever().for_element(locator).await {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
-        return Vec::new();
+        return;
     }
 
     let trs = match ctx.driver.find(locator).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
-            return Vec::new();
+            return;
         }
     };
 
@@ -47,36 +53,30 @@ pub async fn work(page: i32, ctx: &Context) -> Vec<Thread> {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
-            return Vec::new();
+            return;
         }
     };
 
     let fragment = Html::parse_fragment(&html);
-    fragment
+    let res = fragment
         .select(&ctx.sel_content_tr)
         .filter_map(|tr| {
             let c = tr.child_elements().next_chunk::<5>().ok()?;
 
             let sub = c[1].select(&ctx.sel_subject_old).next()?;
-            let mut title = sub.text().collect::<String>();
-            unsafe {
-                let u = title.trim();
-                let (p, l) = (u.as_ptr(), u.len());
-                core::ptr::copy(p, title.as_mut_ptr(), l);
-                title.as_mut_vec().truncate(l);
-            }
+            let title = sub.text().map(str::trim).collect::<String>();
             let tid = sub.attr("id")?.strip_prefix("tid_")?.parse().ok()?;
             let replies = c[2]
                 .text()
+                .map(str::trim)
                 .collect::<String>()
-                .trim()
                 .replace(',', "")
                 .parse()
                 .ok()?;
             let views = c[3]
                 .text()
+                .map(str::trim)
                 .collect::<String>()
-                .trim()
                 .replace(',', "")
                 .parse()
                 .ok()?;
@@ -98,5 +98,30 @@ pub async fn work(page: i32, ctx: &Context) -> Vec<Thread> {
                 lastPost,
             })
         })
-        .collect()
+        .collect::<Vec<_>>();
+
+    if !res.is_empty() {
+        let res: Result<(), BB8Error> = try {
+            const SQL: &str = "with tmp_insert(i, t, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::bigint[], $4::bigint[], $5::timestamp[])) insert into hackforums.posts (id, title, replies, views, lastpost, time, section) select i, t, r, v, l, now() at time zone 'UTC', 291 from tmp_insert";
+
+            let mut conn = get_connection().await?;
+            let stmt = conn.prepare_static(SQL.into()).await?;
+            conn.execute(
+                &stmt,
+                &[
+                    &ToSqlIter(res.iter().map(|x| x.tid)),
+                    &ToSqlIter(res.iter().map(|x| &*x.title)),
+                    &ToSqlIter(res.iter().map(|x| x.replies)),
+                    &ToSqlIter(res.iter().map(|x| x.views)),
+                    &ToSqlIter(res.iter().map(|x| x.lastPost)),
+                ],
+            )
+            .await?;
+
+            tracing::info!(target: "db", "\x1b[36m[Page #{page}] update {} items\x1b[0m", res.len());
+        };
+        if let Err(e) = res {
+            tracing::error!(target: "db", "\x1b[31m[Page #{page}] db err: {e}\x1b[0m");
+        }
+    }
 }

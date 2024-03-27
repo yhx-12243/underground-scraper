@@ -43,6 +43,10 @@ path = "src/hackforums/main.rs"
 name = "hackforums-inner"
 path = "src/hackforums-inner/main.rs"
 
+[[bin]]
+name = "ezkify"
+path = "src/ezkify/main.rs"
+
 [lib]
 name = "t2"
 path = "src/lib.rs"

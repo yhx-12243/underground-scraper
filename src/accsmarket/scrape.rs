@@ -3,7 +3,6 @@ use std::{
     time::SystemTime,
 };
 
-use httpdate::parse_http_date;
 use reqwest::{header::DATE, Client as Request};
 use scraper::{Html, Selector};
 use t2::db::{get_connection, BB8Error, ToSqlIter};
@@ -13,8 +12,8 @@ pub struct Context {
     pub sel_scp: Selector,
 }
 
-pub async fn work(id: i64, desc: String, ctx: &Context) {
-    tracing::info!(target: "worker", "id = {id}, desc = {desc:?}");
+pub async fn work(id: i64, c_desc: String, ctx: &Context) {
+    tracing::info!(target: "worker", "id = {id}, desc = {c_desc:?}");
 
     let form = [
         ("section", "get_soc"),
@@ -33,7 +32,7 @@ pub async fn work(id: i64, desc: String, ctx: &Context) {
             .headers()
             .get(DATE)
             .and_then(|s| s.to_str().ok())
-            .and_then(|s| parse_http_date(s).ok())
+            .and_then(|s| httpdate::parse_http_date(s).ok())
         else {
             tracing::warn!(target: "worker", "[#{id}] no/wrong date");
             return;

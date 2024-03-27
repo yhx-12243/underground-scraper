@@ -65,38 +65,9 @@ async fn main() -> anyhow::Result<()> {
         sel_subject_old: scraper::Selector::parse(".subject_old,.subject_new").unwrap(),
     };
 
-    let mut res = Vec::new();
-    for i in 1..=558 {
-        let mut block = scrape::work(i, &ctx).await;
-        res.append(&mut block);
-        tokio::time::sleep(const { core::time::Duration::from_millis(500) }).await;
-    }
-
-    if !res.is_empty() {
-        use t2::db::{get_connection, BB8Error, ToSqlIter};
-
-        let res: Result<(), BB8Error> = try {
-            const SQL: &str = "with tmp_insert(i, t, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::bigint[], $4::bigint[], $5::timestamp[])) insert into hackforums.posts (id, title, replies, views, lastpost, time) select i, t, r, v, l, now() at time zone 'UTC' from tmp_insert";
-
-            let mut conn = get_connection().await?;
-            let stmt = conn.prepare_static(SQL.into()).await?;
-            conn.execute(
-                &stmt,
-                &[
-                    &ToSqlIter(res.iter().map(|x| x.tid)),
-                    &ToSqlIter(res.iter().map(|x| &*x.title)),
-                    &ToSqlIter(res.iter().map(|x| x.replies)),
-                    &ToSqlIter(res.iter().map(|x| x.views)),
-                    &ToSqlIter(res.iter().map(|x| x.lastPost)),
-                ],
-            )
-            .await?;
-
-            tracing::info!(target: "db", "\x1b[36mupdate {} items\x1b[0m", res.len());
-        };
-        if let Err(e) = res {
-            tracing::error!(target: "db", "\x1b[31mdb err: {e}\x1b[0m");
-        }
+    for i in 1..=2631 {
+        scrape::work(i, &ctx).await;
+        tokio::time::sleep(const { core::time::Duration::from_millis(250) }).await;
     }
 
     ctx.driver.close().await.map_err(Into::into)

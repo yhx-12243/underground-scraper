@@ -43,6 +43,7 @@
     allocator_api,
     inline_const,
     iter_array_chunks,
+    iter_next_chunk,
     lazy_cell,
     stmt_expr_attributes,
     try_blocks,
@@ -68,10 +69,8 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     let html = scraper::Html::parse_document(&res);
 
-    let sel_soc_bl = scraper::Selector::parse(".soc-bl").unwrap();
-    let sel_h2 = scraper::Selector::parse("h2").unwrap();
     let container = html
-        .select(&sel_soc_bl)
+        .select(&scraper::Selector::parse(".soc-bl").unwrap())
         .next()
         .ok_or_else(|| anyhow::anyhow!("element not found"))?;
 
@@ -80,7 +79,8 @@ async fn main() -> anyhow::Result<()> {
         sel_scp: scraper::Selector::parse(".soc-text>p").unwrap(),
     };
 
-    let mut id = 0i64;
+    let sel_h2 = scraper::Selector::parse("h2").unwrap();
+    let mut id = 0;
     let mut desc = String::new();
     let mut futs = Vec::new();
     for child in container.child_elements() {

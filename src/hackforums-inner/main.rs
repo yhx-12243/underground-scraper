@@ -48,19 +48,12 @@
     try_blocks,
     yeet_expr
 )]
-
-use std::collections::VecDeque;
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
     t2::db::init_db().await;
 
-    let client = reqwest::Client::builder()
-        .connect_timeout(const { core::time::Duration::from_secs(5) })
-        .build()?;
-
-    let mut ids: Vec<i64> = {
+    let ids: Vec<i64> = {
         const SQL: &str = "select distinct id from hackforums.posts natural left outer join hackforums.content where hackforums.content.id is null order by id";
         let mut conn = t2::db::get_connection().await?;
         let stmt = conn.prepare_static(SQL.into()).await?;
@@ -75,6 +68,7 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
 /*
 const dp = new DOMParser();
 
