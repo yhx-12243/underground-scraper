@@ -47,7 +47,7 @@
     lazy_cell,
     stmt_expr_attributes,
     try_blocks,
-    yeet_expr
+    yeet_expr,
 )]
 
 use t2::db::get_connection;

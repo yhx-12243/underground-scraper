@@ -50,38 +50,28 @@
     yeet_expr,
 )]
 
+mod scrape;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
     t2::db::init_db().await;
 
-    let ids: Vec<i64> = {
-        const SQL: &str = "select distinct id from hackforums.posts natural left outer join hackforums.content where hackforums.content.id is null order by id";
-        let mut conn = t2::db::get_connection().await?;
-        let stmt = conn.prepare_static(SQL.into()).await?;
-        conn.query(&stmt, &[])
-            .await?
-            .into_iter()
-            .filter_map(|row| row.try_get(0).ok())
-            .collect()
+    let driver = t2::scrape::get_driver(false).await?;
+
+    let ctx = scrape::Context {
+        driver,
+        reg_id: regex::Regex::new(r"js-threadListItem-(\d+)").unwrap(),
+        sel_struct_item: scraper::Selector::parse(".structItem").unwrap(),
+        sel_title: scraper::Selector::parse(".structItem-title>a").unwrap(),
+        sel_udt: scraper::Selector::parse("time.u-dt").unwrap(),
+        sel_dd: scraper::Selector::parse("dd").unwrap(),
     };
 
-    dbg!(ids);
+    for i in 1..=88 {
+        scrape::work(i, &ctx).await;
+        tokio::time::sleep(const { core::time::Duration::from_millis(250) }).await;
+    }
 
-    Ok(())
+    ctx.driver.close().await.map_err(Into::into)
 }
-
-/*
-const dp = new DOMParser();
-
-async function work(id) {
-    const txt = await fetch(`https://hackforums.net/showthread.php?tid=${id}`).then(x => x.text());
-    const doc = dp.parseFromString(txt, 'text/html');
-    const div = doc.querySelector('.post_content');
-    const [head, body] = div.children;
-    const date_str = head.querySelector('.post_date').firstChild.textContent;
-    const date = new Date(`${date_str}Z`);
-    const content = body.textContent;
-    return [date, content];
-}
-*/
