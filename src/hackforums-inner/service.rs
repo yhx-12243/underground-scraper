@@ -6,13 +6,15 @@ use serde::Deserialize;
 use t2::db::BB8Error;
 
 static IDS: Mutex<Vec<i64>> = Mutex::new(Vec::new());
+static BIDS: Mutex<Vec<i64>> = Mutex::new(Vec::new());
 
-pub fn init(value: Vec<i64>) {
-    *IDS.lock() = value;
+pub fn init(ids: Vec<i64>, bids: Vec<i64>) {
+    *IDS.lock() = ids;
+    *BIDS.lock() = bids;
 }
 
-pub fn remove(id: i64) {
-    let mut guard = IDS.lock();
+pub fn remove(which: &Mutex<Vec<i64>>, id: i64) {
+    let mut guard = which.lock();
     if let Some(i) = guard.iter().position(|&x| x == id) {
         guard.remove(i);
     }
@@ -21,6 +23,18 @@ pub fn remove(id: i64) {
 #[actix_web::get("/get")]
 pub async fn get() -> Json<Vec<i64>> {
     let mut guard = IDS.lock();
+    let ret = if guard.len() > 50 {
+        guard.rotate_left(50);
+        guard[guard.len() - 50..].to_vec()
+    } else {
+        guard.clone()
+    };
+    Json(ret)
+}
+
+#[actix_web::get("/get/black")]
+pub async fn get_black() -> Json<Vec<i64>> {
+    let mut guard = BIDS.lock();
     let ret = if guard.len() > 50 {
         guard.rotate_left(50);
         guard[guard.len() - 50..].to_vec()
@@ -54,7 +68,32 @@ pub async fn send(data: Json<SendData>) -> Json<String> {
         return Json(e.to_string());
     }
 
-    remove(id);
+    remove(&IDS, id);
+
+    Json(String::new())
+}
+
+#[derive(Deserialize)]
+struct SendDataBlack {
+    id: i64,
+    content: String,
+}
+
+#[post("/send/black")]
+pub async fn send_black(data: Json<SendDataBlack>) -> Json<String> {
+    let Json(SendDataBlack { id, content }) = data;
+
+    const SQL: &str = "insert into blackhatworld.content (id, content) values ($1, $2)";
+    let e: Result<(), BB8Error> = try {
+        let mut conn = t2::db::get_connection().await?;
+        let stmt = conn.prepare_static(SQL.into()).await?;
+        conn.execute(&stmt, &[&id, &&*content]).await?;
+    };
+    if let Err(e) = e {
+        return Json(e.to_string());
+    }
+
+    remove(&BIDS, id);
 
     Json(String::new())
 }
