@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
         sel_dd: scraper::Selector::parse("dd").unwrap(),
     };
 
-    for i in 1..=88 {
+    for i in 1..=36 {
         scrape::work(i, &ctx).await;
         tokio::time::sleep(const { core::time::Duration::from_millis(250) }).await;
     }

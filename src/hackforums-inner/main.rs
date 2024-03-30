@@ -47,32 +47,54 @@
     lazy_cell,
     stmt_expr_attributes,
     try_blocks,
-    yeet_expr,
+    yeet_expr
 )]
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+mod service;
+
+async fn get_ids() -> impl Iterator<Item = i64> {
+    const SQL: &str = "select distinct id from hackforums.posts natural left outer join hackforums.content where hackforums.content.id is null order by id desc";
+    let mut conn = t2::db::get_connection().await.unwrap();
+    let stmt = conn.prepare_static(SQL.into()).await.unwrap();
+    conn.query(&stmt, &[])
+        .await
+        .unwrap()
+        .into_iter()
+        .filter_map(|row| row.try_get(0).ok())
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    use actix_web::{web, App, HttpServer};
+
     pretty_env_logger::init_timed();
     t2::db::init_db().await;
 
-    let ids: Vec<i64> = {
-        const SQL: &str = "select distinct id from hackforums.posts natural left outer join hackforums.content where hackforums.content.id is null order by id";
-        let mut conn = t2::db::get_connection().await?;
-        let stmt = conn.prepare_static(SQL.into()).await?;
-        conn.query(&stmt, &[])
-            .await?
-            .into_iter()
-            .filter_map(|row| row.try_get(0).ok())
-            .collect()
-    };
+    service::init(get_ids().await.collect());
+    // let ids: Vec<i64> = get_ids().await?.collect();
 
-    dbg!(ids);
+    let json_config = web::JsonConfig::default().content_type_required(false);
 
-    Ok(())
+    let server = HttpServer::new(move || {
+        let cors = actix_cors::Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .allow_private_network_access();
+
+        App::new()
+            .app_data(json_config.clone())
+            .wrap(cors)
+            .service(service::get)
+            .service(service::send)
+    });
+
+    server.bind_uds("underground-scraper.sock")?.run().await
 }
 
 /*
 const dp = new DOMParser();
+const sleep = ms => new Promise(f => setTimeout(f, ms));
 
 async function work(id) {
     const txt = await fetch(`https://hackforums.net/showthread.php?tid=${id}`).then(x => x.text());
@@ -80,8 +102,24 @@ async function work(id) {
     const div = doc.querySelector('.post_content');
     const [head, body] = div.children;
     const date_str = head.querySelector('.post_date').firstChild.textContent;
-    const date = new Date(`${date_str}Z`);
-    const content = body.textContent;
-    return [date, content];
+    const date = new Date(`${date_str}`).getTime();
+    const content = body.innerText;
+    return { id, date, content };
 }
+
+async function go(list) {
+    let idx = 0;
+    for (const id of list) {
+        const data = await work(id);
+        await fetch('https://localhost:1832/send', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+        console.log(idx++, id, 'finished');
+    }
+}
+
+list = await fetch('https://localhost:1832/get').then(x => x.json());
+go(list);
+
 */

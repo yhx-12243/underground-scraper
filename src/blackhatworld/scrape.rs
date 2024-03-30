@@ -33,8 +33,8 @@ pub async fn work(page: i32, ctx: &Context) {
     tracing::info!(target: "worker", "[Page #{page}] start");
 
     let url = format!(
-        "https://www.blackhatworld.com/forums/social-media.200/page-{page}"
-        // "https://www.blackhatworld.com/forums/content-copywriting.194/page-{page}"
+        // "https://www.blackhatworld.com/forums/social-media.200/page-{page}"
+        "https://www.blackhatworld.com/forums/content-copywriting.194/page-{page}"
     );
 
     if let Err(e) = ctx.driver.goto(&url).await {
@@ -118,7 +118,7 @@ pub async fn work(page: i32, ctx: &Context) {
 
     if !res.is_empty() {
         let res: Result<(), BB8Error> = try {
-            const SQL: &str = "with tmp_insert(i, a, t, c, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::text[], $4::timestamp[], $5::bigint[], $6::bigint[], $7::timestamp[])) insert into blackhatworld.posts (id, time, author, title, create_time, replies, views, last_reply, section) select i, now() at time zone 'UTC', a, t, c, r, v, l, 200 from tmp_insert";
+            const SQL: &str = "with tmp_insert(i, a, t, c, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::text[], $4::timestamp[], $5::bigint[], $6::bigint[], $7::timestamp[])) insert into blackhatworld.posts (id, time, author, title, create_time, replies, views, last_reply, section) select i, now() at time zone 'UTC', a, t, c, r, v, l, 194 from tmp_insert";
 
             let mut conn = get_connection().await?;
             let stmt = conn.prepare_static(SQL.into()).await?;
