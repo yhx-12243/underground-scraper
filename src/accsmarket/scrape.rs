@@ -92,7 +92,7 @@ pub async fn work(id: i64, c_desc: String, ctx: &Context) {
             tracing::info!(target: "worker", "\x1b[36m[#{id}] update {} items\x1b[0m", archived.len());
         };
         if let Err(e) = res {
-            tracing::error!(target: "worker", "\x1b[31m[#{id}] db err: {e}\x1b[0m");
+            tracing::error!(target: "worker", "\x1b[31m[#{id}] {e:?}\x1b[0m");
         }
     }
 }

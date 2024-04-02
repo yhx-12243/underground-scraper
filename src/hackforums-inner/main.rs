@@ -1,44 +1,3 @@
-#![warn(clippy::pedantic, clippy::nursery)]
-#![allow(
-    clippy::absolute_paths,
-    clippy::arithmetic_side_effects,
-    clippy::as_conversions,
-    clippy::cast_lossless, // u32 -> u64
-    clippy::cast_possible_truncation, // u64 -> u32
-    clippy::cast_possible_wrap, // u32 -> i32
-    clippy::cast_sign_loss, // i32 -> u32
-    clippy::option_if_let_else,
-    clippy::future_not_send,
-    clippy::host_endian_bytes,
-    clippy::implicit_return,
-    clippy::indexing_slicing,
-    clippy::inline_always,
-    clippy::integer_division,
-    clippy::min_ident_chars,
-    clippy::missing_assert_message,
-    clippy::missing_trait_methods,
-    clippy::module_name_repetitions,
-    clippy::multiple_unsafe_ops_per_block,
-    clippy::needless_pass_by_value,
-    clippy::non_ascii_literal,
-    clippy::single_char_lifetime_names,
-    clippy::pattern_type_mismatch,
-    clippy::pub_use,
-    clippy::question_mark_used,
-    clippy::ref_patterns,
-    clippy::self_named_module_files,
-    clippy::shadow_reuse,
-    clippy::shadow_unrelated,
-    clippy::similar_names,
-    clippy::single_call_fn,
-    clippy::std_instead_of_alloc,
-    clippy::std_instead_of_core,
-    clippy::string_add,
-    clippy::unseparated_literal_suffix,
-    clippy::wildcard_enum_match_arm,
-    internal_features,
-    non_snake_case,
-)]
 #![feature(
     allocator_api,
     inline_const,
@@ -106,26 +65,27 @@ async fn main() -> std::io::Result<()> {
 }
 
 /*
+
+// async function work(id) {
+//     const txt = await fetch(`https://www.blackhatworld.com/seo/${id}`).then(x => x.text());
+//     const doc = dp.parseFromString(txt, 'text/html');
+//     const div = doc.querySelector('article.message-body');
+//     const content    = div.innerText;
+//     return { id, content };
+// }
+
 const dp = new DOMParser();
 const sleep = ms => new Promise(f => setTimeout(f, ms));
 
-// async function work(id) {
-//     const txt = await fetch(`https://hackforums.net/showthread.php?tid=${id}`).then(x => x.text());
-//     const doc = dp.parseFromString(txt, 'text/html');
-//     const div = doc.querySelector('.post_content');
-//     const [head, body] = div.children;
-//     const date_str = head.querySelector('.post_date').firstChild.textContent;
-//     const date = new Date(`${date_str}`).getTime();
-//     const content = body.innerText;
-//     return { id, date, content };
-// }
-
 async function work(id) {
-    const txt = await fetch(`https://www.blackhatworld.com/seo/${id}`).then(x => x.text());
+    const txt = await fetch(`https://hackforums.net/showthread.php?tid=${id}`).then(x => x.text());
     const doc = dp.parseFromString(txt, 'text/html');
-    const div = doc.querySelector('article.message-body');
-    const content = div.innerText;
-    return { id, content };
+    const div = doc.querySelector('.post_content');
+    const [head, body] = div.children;
+    const date_str = head.querySelector('.post_date').firstChild.textContent;
+    const date = new Date(`${date_str}`).getTime();
+    const content = body.innerText;
+    return { id, date, content };
 }
 
 async function go(list) {
@@ -133,21 +93,30 @@ async function go(list) {
     for (let i = 0; i < list.length; ++i) {
         const idx = i, id = list[i];
         futs.push(
-            sleep(idx * 500)
+            sleep(idx * 1250)
                 .then(() => work(id))
                 .then(data => {
                     console.log(idx, data.id, 'finished');
-                    return fetch('https://localhost:1832/send/black', {
+                    return fetch('https://localhost:1832/send', {
                         method: 'POST',
                         body: JSON.stringify(data),
                     });
                 })
         );
     }
-    return Promise.all(futs);
+    return Promise.allSettled(futs);
 }
 
-list = await fetch('https://localhost:1832/get/black').then(x => x.json());
-await go(list);
+(async () => {
+
+
+for (let i = 0; ; ++i) {
+    list = await fetch('https://localhost:1832/get').then(x => x.json());
+    if (!list.length) break;
+    await go(list).then(() => {}, () => {});
+}
+
+
+})();
 
 */

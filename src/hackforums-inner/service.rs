@@ -53,12 +53,13 @@ struct SendData {
 
 #[post("/send")]
 pub async fn send(data: Json<SendData>) -> Json<String> {
+    const SQL: &str =
+        "insert into hackforums.content (id, create_time, content) values ($1, $2, $3)";
+
     let Json(SendData { id, date, content }) = data;
 
     let date = SystemTime::UNIX_EPOCH + Duration::from_millis(date);
 
-    const SQL: &str =
-        "insert into hackforums.content (id, create_time, content) values ($1, $2, $3)";
     let e: Result<(), BB8Error> = try {
         let mut conn = t2::db::get_connection().await?;
         let stmt = conn.prepare_static(SQL.into()).await?;
@@ -81,9 +82,10 @@ struct SendDataBlack {
 
 #[post("/send/black")]
 pub async fn send_black(data: Json<SendDataBlack>) -> Json<String> {
+    const SQL: &str = "insert into blackhatworld.content (id, content) values ($1, $2)";
+
     let Json(SendDataBlack { id, content }) = data;
 
-    const SQL: &str = "insert into blackhatworld.content (id, content) values ($1, $2)";
     let e: Result<(), BB8Error> = try {
         let mut conn = t2::db::get_connection().await?;
         let stmt = conn.prepare_static(SQL.into()).await?;
