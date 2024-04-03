@@ -1,13 +1,4 @@
-#![feature(
-    allocator_api,
-    inline_const,
-    iter_array_chunks,
-    iter_next_chunk,
-    lazy_cell,
-    stmt_expr_attributes,
-    try_blocks,
-    yeet_expr,
-)]
+#![feature(inline_const, iter_next_chunk)]
 
 use t2::db::get_connection;
 
