@@ -1,4 +1,4 @@
-#![feature(inline_const, iter_next_chunk)]
+#![feature(iter_next_chunk)]
 
 use t2::db::get_connection;
 

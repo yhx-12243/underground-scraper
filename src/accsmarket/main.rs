@@ -1,4 +1,4 @@
-#![feature(inline_const, try_blocks)]
+#![feature(try_blocks)]
 
 mod scrape;
 

@@ -1,4 +1,4 @@
-#![feature(inline_const, iter_next_chunk, try_blocks)]
+#![feature(iter_next_chunk, try_blocks)]
 
 mod scrape;
 
@@ -18,9 +18,9 @@ async fn main() -> anyhow::Result<()> {
         sel_dd: scraper::Selector::parse("dd").unwrap(),
     };
 
-    for i in 1..=36 {
+    for i in 1..=1713 {
         scrape::work(i, &ctx).await;
-        tokio::time::sleep(const { core::time::Duration::from_millis(250) }).await;
+        tokio::time::sleep(const { core::time::Duration::from_millis(2000) }).await;
     }
 
     ctx.driver.close().await.map_err(Into::into)
