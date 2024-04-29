@@ -57,14 +57,6 @@ async fn main() -> std::io::Result<()> {
 
 /*
 
-// async function work(id) {
-//     const txt = await fetch(`https://www.blackhatworld.com/seo/${id}`).then(x => x.text());
-//     const doc = dp.parseFromString(txt, 'text/html');
-//     const div = doc.querySelector('article.message-body');
-//     const content    = div.innerText;
-//     return { id, content };
-// }
-
 const dp = new DOMParser();
 const sleep = ms => new Promise(f => setTimeout(f, ms));
 
@@ -79,35 +71,38 @@ async function work(id) {
     return { id, date, content };
 }
 
+const sleep = ms => new Promise(f => setTimeout(f, ms));
+
+async function work(id) {
+    const txt = await fetch(`https://www.blackhatworld.com/seo/${id}`).then(x => x.text());
+    // const doc = dp.parseFromString(txt, 'text/html');
+    // const div = doc.querySelector('article.message-body');
+    // const content = div.innerText;
+    return { id, content: txt };
+}
+
 async function go(list) {
     const futs = [];
     for (let i = 0; i < list.length; ++i) {
         const idx = i, id = list[i];
-        futs.push(
-            sleep(idx * 1250)
-                .then(() => work(id))
-                .then(data => {
-                    console.log(idx, data.id, 'finished');
-                    return fetch('https://localhost:1832/send', {
-                        method: 'POST',
-                        body: JSON.stringify(data),
-                    });
-                })
-        );
+        await work(id)
+            .then(data => {
+                console.log(idx, data.id, 'finished');
+                return fetch('https://localhost:18322/send/black', {
+                    method: 'POST',
+                    body: JSON.stringify(data),
+                });
+            });
+        await sleep(5000);
     }
-    return Promise.allSettled(futs);
 }
 
-(async () => {
-
-
 for (let i = 0; ; ++i) {
-    list = await fetch('https://localhost:1832/get').then(x => x.json());
+    list = await fetch('https://localhost:18322/get/black').then(x => x.json());
     if (!list.length) break;
     await go(list).then(() => {}, () => {});
 }
 
 
-})();
 
 */

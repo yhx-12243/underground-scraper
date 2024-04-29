@@ -1,6 +1,5 @@
 use std::time::{Duration, SystemTime};
 
-use const_format::formatcp;
 use fantoccini::{Client as Driver, Locator};
 use regex::Regex;
 use scraper::{Html, Selector};
@@ -8,6 +7,7 @@ use t2::db::{get_connection, BB8Error, ToSqlIter};
 
 pub struct Context {
     pub driver: Driver,
+    pub cfg: (&'static str, i64, i32),
     pub reg_id: Regex,
     pub sel_struct_item: Selector,
     pub sel_title: Selector,
@@ -33,27 +33,9 @@ fn _pa(x: &str) -> Option<i64> {
 pub async fn work(page: i32, ctx: &Context) {
     tracing::info!(target: "worker", "[Page #{page}] start");
 
-    #[rustfmt::skip]
-    const BASE: (&str, i64) = (
-        // "social-media", 200,
-        // "content-copywriting", 194,
-        // "general-social-chat", 32,
-        // "facebook", 86,
-        "instagram", 215,
-        // "linkedin", 214,
-        // "myspace", 87,
-        // "pinterest", 211,
-        // "reddit", 301,
-        // "tiktok", 279,
-        // "tumblr", 217,
-        // "weibo", 216,
-        // "x-formerly-twitter", 210,
-        // "youtube", 77,
-    );
-
     let url = format!(
         "https://www.blackhatworld.com/forums/{}.{}/page-{page}",
-        BASE.0, BASE.1
+        ctx.cfg.0, ctx.cfg.1,
     );
 
     if let Err(e) = ctx.driver.goto(&url).await {
@@ -137,7 +119,7 @@ pub async fn work(page: i32, ctx: &Context) {
 
     if !res.is_empty() {
         let res: Result<(), BB8Error> = try {
-            const SQL: &str = formatcp!("with tmp_insert(i, a, t, c, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::text[], $4::timestamp[], $5::bigint[], $6::bigint[], $7::timestamp[])) insert into blackhatworld.posts (id, time, author, title, create_time, replies, views, last_reply, section) select i, now() at time zone 'UTC', a, t, c, r, v, l, {} from tmp_insert on conflict (id) do update set time = excluded.time, author = excluded.author, title = excluded.title, replies = excluded.replies, views = excluded.views, last_reply = excluded.last_reply", BASE.1);
+            let SQL = format!("with tmp_insert(i, a, t, c, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::text[], $4::timestamp[], $5::bigint[], $6::bigint[], $7::timestamp[])) insert into blackhatworld.posts (id, time, author, title, create_time, replies, views, last_reply, section) select i, now() at time zone 'UTC', a, t, c, r, v, l, {} from tmp_insert on conflict (id) do update set time = excluded.time, author = excluded.author, title = excluded.title, replies = excluded.replies, views = excluded.views, last_reply = excluded.last_reply", ctx.cfg.1);
 
             let mut conn = get_connection().await?;
             let stmt = conn.prepare_static(SQL.into()).await?;
