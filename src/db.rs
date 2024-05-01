@@ -31,11 +31,12 @@ mod constants {
     pub const HOST_PATH: &str = env_or_default!("DB_HOST_PATH", "/var/run/postgresql");
     pub const USER: &str = env_or_default!("DB_USER", "postgres");
     pub const DBNAME: &str = env_or_default!("DB_NAME", "postgres");
+    pub const PASSWORD: Option<&str> = option_env!("DB_PASSWORD");
     pub const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 }
 
 pub async fn init_db() {
-    use constants::{CONNECTION_TIMEOUT, DBNAME, HOST_PATH, USER};
+    use constants::{CONNECTION_TIMEOUT, DBNAME, HOST_PATH, PASSWORD, USER};
 
     let mut config = tokio_postgres::Config::new();
     config
@@ -43,9 +44,13 @@ pub async fn init_db() {
         .user(USER)
         .dbname(DBNAME)
         .connect_timeout(CONNECTION_TIMEOUT);
+    if let Some(password) = PASSWORD {
+        config.password(password);
+    }
 
     let manager = PostgresConnectionManager::new(config, NoTls);
 
+    #[allow(clippy::unwrap_used)]
     let pool = Pool::builder()
         .connection_timeout(CONNECTION_TIMEOUT)
         .build(manager)

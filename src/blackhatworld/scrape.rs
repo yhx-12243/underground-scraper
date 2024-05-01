@@ -30,6 +30,7 @@ fn _pa(x: &str) -> Option<i64> {
     x.replace('K', "000").replace('M', "000000").parse().ok()
 }
 
+#[allow(clippy::too_many_lines)]
 pub async fn work(page: i32, ctx: &Context) {
     tracing::info!(target: "worker", "[Page #{page}] start");
 
@@ -123,19 +124,20 @@ pub async fn work(page: i32, ctx: &Context) {
 
             let mut conn = get_connection().await?;
             let stmt = conn.prepare_static(SQL.into()).await?;
-            let n_rows = conn.execute(
-                &stmt,
-                &[
-                    &ToSqlIter(res.iter().map(|x| x.id)),
-                    &ToSqlIter(res.iter().map(|x| &*x.author)),
-                    &ToSqlIter(res.iter().map(|x| &*x.title)),
-                    &ToSqlIter(res.iter().map(|x| x.time)),
-                    &ToSqlIter(res.iter().map(|x| x.replies)),
-                    &ToSqlIter(res.iter().map(|x| x.views)),
-                    &ToSqlIter(res.iter().map(|x| x.lastReply)),
-                ],
-            )
-            .await?;
+            let n_rows = conn
+                .execute(
+                    &stmt,
+                    &[
+                        &ToSqlIter(res.iter().map(|x| x.id)),
+                        &ToSqlIter(res.iter().map(|x| &*x.author)),
+                        &ToSqlIter(res.iter().map(|x| &*x.title)),
+                        &ToSqlIter(res.iter().map(|x| x.time)),
+                        &ToSqlIter(res.iter().map(|x| x.replies)),
+                        &ToSqlIter(res.iter().map(|x| x.views)),
+                        &ToSqlIter(res.iter().map(|x| x.lastReply)),
+                    ],
+                )
+                .await?;
 
             tracing::info!(target: "db", "\x1b[36m[Page #{page}] update {n_rows}/{} items\x1b[0m", res.len());
         };
