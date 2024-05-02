@@ -5,7 +5,7 @@ mod scrape;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
-    t2::db::init_db().await;
+    uscr::db::init_db().await;
 
     let client = reqwest::Client::builder()
         .connect_timeout(const { core::time::Duration::from_secs(5) })

@@ -1,13 +1,16 @@
-use std::time::{Duration, SystemTime};
+use std::{
+    ops::ControlFlow,
+    time::{Duration, SystemTime},
+};
 
 use fantoccini::{Client as Driver, Locator};
 use regex::Regex;
 use scraper::{Html, Selector};
-use t2::db::{get_connection, BB8Error, ToSqlIter};
+use uscr::db::{get_connection, BB8Error, ToSqlIter};
 
 pub struct Context {
     pub driver: Driver,
-    pub cfg: (&'static str, i64, i32),
+    pub cfg: (&'static str, i64),
     pub reg_id: Regex,
     pub sel_struct_item: Selector,
     pub sel_title: Selector,
@@ -31,30 +34,30 @@ fn _pa(x: &str) -> Option<i64> {
 }
 
 #[allow(clippy::too_many_lines)]
-pub async fn work(page: i32, ctx: &Context) {
-    tracing::info!(target: "worker", "[Page #{page}] start");
+pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
+    tracing::info!(target: "worker", "[Forum \x1b[33m{}\x1b[0m] [Page \x1b[32m#{page}\x1b[0m] start", ctx.cfg.0);
 
     let url = format!(
-        "https://www.blackhatworld.com/forums/{}.{}/page-{page}",
+        "https://www.blackhatworld.com/forums/{}.{}/page-{page}/?order=post_date&direction=desc",
         ctx.cfg.0, ctx.cfg.1,
     );
 
     if let Err(e) = ctx.driver.goto(&url).await {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
-        return;
+        return ControlFlow::Continue(());
     }
 
     let locator = Locator::Css(".js-threadList");
     if let Err(e) = ctx.driver.wait().forever().for_element(locator).await {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
-        return;
+        return ControlFlow::Continue(());
     }
 
     let list = match ctx.driver.find(Locator::Css(".structItemContainer")).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
-            return;
+            return ControlFlow::Continue(());
         }
     };
 
@@ -62,7 +65,7 @@ pub async fn work(page: i32, ctx: &Context) {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
-            return;
+            return ControlFlow::Continue(());
         }
     };
 
@@ -120,12 +123,12 @@ pub async fn work(page: i32, ctx: &Context) {
 
     if !res.is_empty() {
         let res: Result<(), BB8Error> = try {
-            let SQL = format!("with tmp_insert(i, a, t, c, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::text[], $4::timestamp[], $5::bigint[], $6::bigint[], $7::timestamp[])) insert into blackhatworld.posts (id, time, author, title, create_time, replies, views, last_reply, section) select i, now() at time zone 'UTC', a, t, c, r, v, l, {} from tmp_insert on conflict (id) do update set time = excluded.time, author = excluded.author, title = excluded.title, replies = excluded.replies, views = excluded.views, last_reply = excluded.last_reply", ctx.cfg.1);
+            let SQL = format!("with tmp_insert(i, a, t, c, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::text[], $4::timestamp[], $5::bigint[], $6::bigint[], $7::timestamp[])) insert into blackhatworld.posts (id, time, author, title, create_time, replies, views, last_reply, section) select i, now() at time zone 'UTC', a, t, c, r, v, l, {} from tmp_insert on conflict (id) do update set time = excluded.time, author = excluded.author, title = excluded.title, replies = excluded.replies, views = excluded.views, last_reply = excluded.last_reply returning xmax", ctx.cfg.1);
 
             let mut conn = get_connection().await?;
             let stmt = conn.prepare_static(SQL.into()).await?;
-            let n_rows = conn
-                .execute(
+            let rows = conn
+                .query(
                     &stmt,
                     &[
                         &ToSqlIter(res.iter().map(|x| x.id)),
@@ -139,10 +142,21 @@ pub async fn work(page: i32, ctx: &Context) {
                 )
                 .await?;
 
+            let n_rows = rows
+                .iter()
+                .filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0))
+                .count();
+
             tracing::info!(target: "db", "\x1b[36m[Page #{page}] update {n_rows}/{} items\x1b[0m", res.len());
+
+            if n_rows == 0 {
+                return ControlFlow::Break(());
+            }
         };
         if let Err(e) = res {
             tracing::error!(target: "db", "\x1b[31m[Page #{page}] db err: {e}\x1b[0m");
         }
     }
+
+    ControlFlow::Continue(())
 }

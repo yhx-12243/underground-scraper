@@ -5,7 +5,7 @@ use std::{
 
 use reqwest::{header::DATE, Client as Request};
 use scraper::{Html, Selector};
-use t2::db::{get_connection, BB8Error, ToSqlIter};
+use uscr::db::{get_connection, BB8Error, ToSqlIter};
 
 pub struct Context {
     pub client: Request,

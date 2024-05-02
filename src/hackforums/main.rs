@@ -5,9 +5,9 @@ mod scrape;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
-    t2::db::init_db().await;
+    uscr::db::init_db().await;
 
-    let driver = t2::scrape::get_driver(false).await?;
+    let driver = uscr::scrape::get_driver(false).await?;
 
     let ctx = scrape::Context {
         driver,

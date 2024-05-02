@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime};
 
 use fantoccini::{Client as Driver, Locator};
 use scraper::{ElementRef, Html, Selector};
-use t2::{
+use uscr::{
     db::{get_connection, BB8Error, ToSqlIter},
     util::simple_parse,
 };

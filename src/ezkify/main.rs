@@ -1,12 +1,12 @@
 #![feature(iter_next_chunk)]
 
-use t2::db::get_connection;
+use uscr::db::get_connection;
 
 async fn insert_category(
     conn: &mut tokio_postgres::Client,
     cid: i64,
     desc: &str,
-) -> t2::db::DBResult<()> {
+) -> uscr::db::DBResult<()> {
     const SQL: &str = "insert into ezkify.categories (id, \"desc\") values ($1, $2) on conflict (id) do update set \"desc\" = excluded.desc";
     let stmt = conn.prepare_static(SQL.into()).await?;
     conn.execute(&stmt, &[&cid, &desc]).await?;
@@ -24,7 +24,7 @@ async fn insert_db(
     min_order: i64,
     max_order: i64,
     description: &str,
-) -> t2::db::DBResult<()> {
+) -> uscr::db::DBResult<()> {
     const SQL: &str = "insert into ezkify.items (id, time, category_id, service, rate_per_1k, min_order, max_order, description) values ($1, $2, $3, $4, $5, $6, $7, $8)";
     let stmt = conn.prepare_static(SQL.into()).await?;
     conn.execute(
@@ -48,7 +48,7 @@ async fn insert_db(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
-    t2::db::init_db().await;
+    uscr::db::init_db().await;
 
     let client = reqwest::Client::builder()
         .connect_timeout(const { core::time::Duration::from_secs(5) })

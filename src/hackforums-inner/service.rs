@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 use actix_web::{post, web::Json};
 use parking_lot::Mutex;
 use serde::Deserialize;
-use t2::db::BB8Error;
+use uscr::db::BB8Error;
 
 static IDS: Mutex<Vec<i64>> = Mutex::new(Vec::new());
 static BIDS: Mutex<Vec<i64>> = Mutex::new(Vec::new());
@@ -61,7 +61,7 @@ pub async fn send(data: Json<SendData>) -> Json<String> {
     let date = SystemTime::UNIX_EPOCH + Duration::from_millis(date);
 
     let e: Result<(), BB8Error> = try {
-        let mut conn = t2::db::get_connection().await?;
+        let mut conn = uscr::db::get_connection().await?;
         let stmt = conn.prepare_static(SQL.into()).await?;
         conn.execute(&stmt, &[&id, &date, &&*content]).await?;
     };
@@ -87,7 +87,7 @@ pub async fn send_black(data: Json<SendDataBlack>) -> Json<String> {
     let Json(SendDataBlack { id, content }) = data;
 
     let e: Result<(), BB8Error> = try {
-        let mut conn = t2::db::get_connection().await?;
+        let mut conn = uscr::db::get_connection().await?;
         let stmt = conn.prepare_static(SQL.into()).await?;
         conn.execute(&stmt, &[&id, &&*content]).await?;
     };

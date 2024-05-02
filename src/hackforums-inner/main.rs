@@ -4,7 +4,7 @@ mod service;
 
 async fn get_ids() -> impl Iterator<Item = i64> {
     const SQL: &str = "select distinct id from hackforums.posts natural left outer join hackforums.content where hackforums.content.id is null order by id desc";
-    let mut conn = t2::db::get_connection().await.unwrap();
+    let mut conn = uscr::db::get_connection().await.unwrap();
     let stmt = conn.prepare_static(SQL.into()).await.unwrap();
     conn.query(&stmt, &[])
         .await
@@ -15,7 +15,7 @@ async fn get_ids() -> impl Iterator<Item = i64> {
 
 async fn get_black_ids() -> impl Iterator<Item = i64> {
     const SQL: &str = "select distinct id from blackhatworld.posts natural left outer join blackhatworld.content where blackhatworld.content.id is null order by id desc";
-    let mut conn = t2::db::get_connection().await.unwrap();
+    let mut conn = uscr::db::get_connection().await.unwrap();
     let stmt = conn.prepare_static(SQL.into()).await.unwrap();
     conn.query(&stmt, &[])
         .await
@@ -29,7 +29,7 @@ async fn main() -> std::io::Result<()> {
     use actix_web::{web, App, HttpServer};
 
     pretty_env_logger::init_timed();
-    t2::db::init_db().await;
+    uscr::db::init_db().await;
 
     service::init(get_ids().await.collect(), get_black_ids().await.collect());
     // let ids: Vec<i64> = get_ids().await?.collect();
