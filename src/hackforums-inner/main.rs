@@ -2,6 +2,7 @@
 
 mod service;
 
+#[allow(dead_code)]
 async fn get_ids() -> impl Iterator<Item = i64> {
     const SQL: &str = "select distinct id from hackforums.posts natural left outer join hackforums.content where hackforums.content.id is null order by id desc";
     let mut conn = uscr::db::get_connection().await.unwrap();
@@ -31,8 +32,7 @@ async fn main() -> std::io::Result<()> {
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;
 
-    service::init(get_ids().await.collect(), get_black_ids().await.collect());
-    // let ids: Vec<i64> = get_ids().await?.collect();
+    service::init(vec![], get_black_ids().await.collect());
 
     let json_config = web::JsonConfig::default().content_type_required(false);
 
@@ -48,7 +48,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .service(service::get)
             .service(service::get_black)
-            .service(service::send)
+            // .service(service::send)
             .service(service::send_black)
     });
 

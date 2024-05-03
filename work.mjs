@@ -199,7 +199,7 @@ if (Number.isSafeInteger(port)) {
 		const workers = [];
 		for (const port_ in Headers) {
 			const port = Number(port_);
-			if (!Number.isSafeInteger(port)) continue;
+			if (!(Number.isSafeInteger(port) && Headers[port_].Cookie)) continue;
 			workers.push(worker(port, Headers[port_]));
 		}
 
