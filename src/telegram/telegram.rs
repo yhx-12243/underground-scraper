@@ -1,14 +1,18 @@
+use std::future::join;
 use std::io::{stdin, stdout, Write};
 
-use grammers_client::{Client, Config, InitParams};
-use grammers_session::Session;
+use grammers_client::{client::bots::InvocationError, Client, Config, InitParams};
+use grammers_session::{PackedChat, PackedType, Session};
 use grammers_tl_types as tl;
-use tl::types::{messages::ChatFull, InputChannel};
+use serde::{Deserialize, Serialize};
+use tokio_postgres::types::Json;
+use uscr::db::{get_connection, BB8Error, ToSqlIter};
 
 #[allow(clippy::from_str_radix_10)] // false positive (const fn)
-const API_ID: i32 = match i32::from_str_radix(env!("TG_ID"), 10) {
-    Ok(id) => id,
-    Err(_) => panic!("invalid API_ID format"),
+const API_ID: i32 = if let Ok(id) = i32::from_str_radix(env!("TG_ID"), 10) {
+    id
+} else {
+    panic!("invalid API_ID format")
 };
 const API_HASH: &str = env!("TG_HASH");
 
@@ -52,44 +56,224 @@ pub fn save(client: &Client) -> std::io::Result<()> {
     client.session().save_to_file(SESSION_PATH)
 }
 
-pub async fn get_channel_access_hash(client: &Client, channel_id: i64) -> anyhow::Result<i64> {
-    use tl::{
-        enums::{messages::Chats, Chat, InputChannel::Channel},
-        types::messages,
-    };
+#[derive(Debug)]
+pub struct Channel {
+    pub id: i64,
+    pub name: String,
+    pub access_hash: i64,
+}
 
-    let id = InputChannel {
-        channel_id,
-        access_hash: 0,
+pub async fn fetch_channels<C>(
+    client: &Client,
+    channels: C,
+) -> Result<Vec<Channel>, InvocationError>
+where
+    C: Iterator<Item = i64>,
+{
+    use tl::{
+        enums::{messages::Chats, Chat, InputChannel::Channel as Ch},
+        types::{messages, InputChannel},
     };
 
     let request = tl::functions::channels::GetChannels {
-        id: vec![Channel(id)],
+        id: channels
+            .map(|channel_id| {
+                Ch(InputChannel {
+                    channel_id,
+                    access_hash: 0,
+                })
+            })
+            .collect(),
     };
 
     let (Chats::Chats(messages::Chats { chats })
     | Chats::Slice(messages::ChatsSlice { chats, .. })) = client.invoke(&request).await?;
 
-    let Some(Chat::Channel(channel)) = chats.first() else {
-        anyhow::bail!("channel #{channel_id} not found");
-    };
+    Ok(chats
+        .into_iter()
+        .filter_map(|chat| {
+            let Chat::Channel(channel) = chat else {
+                return None;
+            };
 
-    Ok(channel.access_hash.unwrap_or(0))
+            Some(Channel {
+                id: channel.id,
+                name: channel.username.unwrap_or(channel.title),
+                access_hash: channel.access_hash.unwrap_or(0),
+            })
+        })
+        .collect())
 }
 
-pub async fn get_channel_info(client: &Client, channel_id: i64) -> anyhow::Result<ChatFull> {
-    use tl::enums::{messages::ChatFull::Full, InputChannel::Channel};
-
-    let access_hash = get_channel_access_hash(client, channel_id).await?;
-    let id = InputChannel {
-        channel_id,
-        access_hash,
+#[allow(dead_code)]
+pub async fn get_channel_info(
+    client: &Client,
+    channel: &Channel,
+) -> Result<tl::types::messages::ChatFull, InvocationError> {
+    use tl::{
+        enums::{messages::ChatFull::Full, InputChannel::Channel},
+        types::InputChannel,
     };
 
     let request = tl::functions::channels::GetFullChannel {
-        channel: Channel(id),
+        channel: Channel(InputChannel {
+            channel_id: channel.id,
+            access_hash: channel.access_hash,
+        }),
     };
 
     let Full(result) = client.invoke(&request).await?;
     Ok(result)
+}
+
+type Media = ();
+type Entity = ();
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Message {
+    pub out: bool,
+    pub mentioned: bool,
+    pub media_unread: bool,
+    pub silent: bool,
+    pub post: bool,
+    pub from_scheduled: bool,
+    pub legacy: bool,
+    pub edit_hide: bool,
+    pub pinned: bool,
+    pub noforwards: bool,
+    pub invert_media: bool,
+    pub offline: bool,
+    pub id: i32,
+    pub from_boosts_applied: Option<i32>,
+    pub via_bot_id: Option<i64>,
+    pub via_business_bot_id: Option<i64>,
+    pub date: i32,
+    pub message: String,
+    pub media: Option<Media>,
+    pub entities: Option<Vec<Entity>>,
+    pub views: Option<i32>,
+    pub forwards: Option<i32>,
+    pub edit_date: Option<i32>,
+    pub post_author: Option<String>,
+    pub grouped_id: Option<i64>,
+    pub ttl_period: Option<i32>,
+    pub quick_reply_shortcut_id: Option<i32>,
+}
+
+impl From<tl::types::Message> for Message {
+    fn from(message: tl::types::Message) -> Self {
+        Self {
+            out: message.out,
+            mentioned: message.mentioned,
+            media_unread: message.media_unread,
+            silent: message.silent,
+            post: message.post,
+            from_scheduled: message.from_scheduled,
+            legacy: message.legacy,
+            edit_hide: message.edit_hide,
+            pinned: message.pinned,
+            noforwards: message.noforwards,
+            invert_media: message.invert_media,
+            offline: message.offline,
+            id: message.id,
+            from_boosts_applied: message.from_boosts_applied,
+            via_bot_id: message.via_bot_id,
+            via_business_bot_id: message.via_business_bot_id,
+            date: message.date,
+            message: message.message,
+            media: None,
+            entities: None,
+            views: message.views,
+            forwards: message.forwards,
+            edit_date: message.edit_date,
+            post_author: message.post_author,
+            grouped_id: message.grouped_id,
+            ttl_period: message.ttl_period,
+            quick_reply_shortcut_id: message.quick_reply_shortcut_id,
+        }
+    }
+}
+
+async fn insert_to_db(messages: Vec<(i32, Message)>, channel_id: i64) -> () {
+    async fn insert_to_db_inner(
+        messages: Vec<(i32, Message)>,
+        channel_id: i64,
+    ) -> Result<(usize, usize, i32, i32), BB8Error> {
+        const SQL: &str = "with tmp_insert(m, d) as (select * from unnest($1::integer[], $3::jsonb[])) insert into telegram.message (id, message_id, channel_id, data) select ($2::bigint << 32) | m, m, $2, d from tmp_insert on conflict (id) do update set message_id = excluded.message_id, channel_id = excluded.channel_id, data = excluded.data returning xmax";
+
+        let len = messages.len();
+        let min = messages.iter().fold(i32::MAX, |x, y| x.min(y.0));
+        let max = messages.iter().fold(i32::MIN, |x, y| x.max(y.0));
+
+        let mut conn = get_connection().await?;
+        let stmt = conn.prepare_static(SQL.into()).await?;
+
+        let rows = conn
+            .query(
+                &stmt,
+                &[
+                    &ToSqlIter(messages.iter().map(|x| x.0)),
+                    &channel_id,
+                    &ToSqlIter(messages.iter().map(|x| Json(&x.1))),
+                ],
+            )
+            .await?;
+
+        let n = rows
+            .iter()
+            .filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0))
+            .count();
+
+        Ok((n, len, min, max))
+    }
+
+    if messages.is_empty() {
+        tracing::warn!(target: "telegram-insert-message", "empty batch");
+    } else {
+        match insert_to_db_inner(messages, channel_id).await {
+            Ok((a, b, c, d)) => {
+                tracing::info!(target: "telegram-insert-message", "{a}/{b} data upserted, id range: [{c}, {d}]")
+            }
+            Err(e) => tracing::error!(target: "telegram-insert-message", ?e),
+        }
+    }
+}
+
+pub async fn fetch_content(client: &Client, channel: &Channel) -> Result<(), InvocationError> {
+    tracing::info!(target: "telegram-insert-message", "======== \x1b[32mFETCHING CONTENT \x1b[36m{}\x1b[0m ========", channel.id);
+
+    let packed = PackedChat {
+        ty: PackedType::Broadcast,
+        id: channel.id,
+        access_hash: (channel.access_hash != 0).then_some(channel.access_hash),
+    };
+
+    let mut iter = client.iter_messages(packed);
+    let mut buffer = Vec::new();
+    let mut first = true;
+    loop {
+        let item = if let Some(raw) = iter.next_raw() {
+            raw
+        } else {
+            if first {
+                first = false;
+            } else {
+                let sleep = tokio::time::sleep(const { core::time::Duration::from_millis(180) });
+                let db_fut = insert_to_db(core::mem::take(&mut buffer), channel.id);
+                join!(sleep, db_fut).await;
+            }
+            println!("s");
+            let t = iter.next().await;
+            println!("e");
+            t
+        }?;
+        let Some(message) = item else { break };
+        let message = Message::from(message.into_inner());
+
+        buffer.push((message.id, message));
+    }
+
+    insert_to_db(buffer, channel.id).await;
+
+    Ok(())
 }

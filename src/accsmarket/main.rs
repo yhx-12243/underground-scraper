@@ -50,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
 
     for fut in futs {
         fut.await;
-        tokio::time::sleep(core::time::Duration::from_millis(250)).await;
+        tokio::time::sleep(const { core::time::Duration::from_millis(250) }).await;
     }
     // futures_util::future::join_all(futs).await;
 
