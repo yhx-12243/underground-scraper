@@ -6,7 +6,7 @@ use grammers_session::{PackedChat, PackedType, Session};
 use grammers_tl_types as tl;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::types::Json;
-use uscr::db::{get_connection, BB8Error, ToSqlIter};
+use uscr::db::{get_connection, BB8Error, DBResult, PooledConnection, ToSqlIter};
 
 #[allow(clippy::from_str_radix_10)] // false positive (const fn)
 const API_ID: i32 = if let Ok(id) = i32::from_str_radix(env!("TG_ID"), 10) {
@@ -147,7 +147,8 @@ type Media = ();
 type Entity = ();
 
 #[derive(Debug, Deserialize, Serialize)]
-struct Message {
+#[allow(clippy::struct_excessive_bools)]
+pub struct Message {
     pub out: bool,
     pub mentioned: bool,
     pub media_unread: bool,
@@ -165,6 +166,7 @@ struct Message {
     pub via_bot_id: Option<i64>,
     pub via_business_bot_id: Option<i64>,
     pub date: i32,
+    #[allow(clippy::struct_field_names)]
     pub message: String,
     pub media: Option<Media>,
     pub entities: Option<Vec<Entity>>,
@@ -219,7 +221,7 @@ async fn insert_to_db(
     async fn insert_to_db_inner(
         messages: Vec<(i32, Message)>,
         channel_id: i64,
-    ) -> Result<(usize, usize, i32, i32), BB8Error> {
+    ) -> Result<(usize, usize, i32, i32, PooledConnection), BB8Error> {
         const SQL: &str = "with tmp_insert(m, d) as (select * from unnest($1::integer[], $3::jsonb[])) insert into telegram.message (id, message_id, channel_id, data) select ($2::bigint << 32) | m, m, $2, d from tmp_insert on conflict (id) do update set message_id = excluded.message_id, channel_id = excluded.channel_id, data = excluded.data returning xmax";
 
         let len = messages.len();
@@ -228,7 +230,6 @@ async fn insert_to_db(
 
         let mut conn = get_connection().await?;
         let stmt = conn.prepare_static(SQL.into()).await?;
-
         let rows = conn
             .query(
                 &stmt,
@@ -245,7 +246,7 @@ async fn insert_to_db(
             .filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0))
             .count();
 
-        Ok((n, len, min, max))
+        Ok((n, len, min, max, conn))
     }
 
     if messages.is_empty() {
@@ -253,16 +254,25 @@ async fn insert_to_db(
         None
     } else {
         match insert_to_db_inner(messages, channel_id).await {
-            Ok((a, b, c, d)) => {
-                tracing::info!(target: "telegram-insert-message", "{a}/{b} data upserted, id range: [{c}, {d}]");
-                match interval {
-                    Some((l, r)) => {
-                        *l = (*l).min(c);
-                        *r = (*r).max(d);
+            Ok((succ, len, min, max, mut conn)) => {
+                tracing::info!(target: "telegram-insert-message", "{succ}/{len} data upserted, id range: [{min}, {max}]");
+                let inner = match interval {
+                    Some(inner) => {
+                        inner.0 = inner.0.min(min);
+                        inner.1 = inner.1.max(max);
+                        inner
                     }
-                    None => *interval = Some((c, d)),
+                    None => interval.insert((min, max)),
+                };
+                let e: DBResult<()> = try {
+                    const SQL: &str = "update telegram.channel set min_message_id = $1, max_message_id = $2 where id = $3";
+                    let stmt = conn.prepare_static(SQL.into()).await?;
+                    conn.execute(&stmt, &[&inner.0, &inner.1, &channel_id]).await?;
+                };
+                if let Err(e) = e {
+                    tracing::error!(target: "telegram-insert-message", ?e);
                 }
-                Some(d)
+                Some(max)
             }
             Err(e) => {
                 tracing::error!(target: "telegram-insert-message", ?e);

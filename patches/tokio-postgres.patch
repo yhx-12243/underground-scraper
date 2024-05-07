@@ -1,0 +1,119 @@
+diff --git a/src/client.rs b/src/client.rs
+index 427a050..b6c7b24 100644
+--- a/src/client.rs
++++ b/src/client.rs
+@@ -23,7 +23,11 @@ use futures_util::{future, pin_mut, ready, StreamExt, TryStreamExt};
+ use parking_lot::Mutex;
+ use postgres_protocol::message::{backend::Message, frontend};
+ use postgres_types::BorrowToSql;
+-use std::collections::HashMap;
++use std::borrow::Cow;
++use std::collections::hash_map::{
++    Entry::{Occupied, Vacant},
++    HashMap,
++};
+ use std::fmt;
+ #[cfg(feature = "runtime")]
+ use std::net::IpAddr;
+@@ -182,6 +186,7 @@ pub struct Client {
+     ssl_mode: SslMode,
+     process_id: i32,
+     secret_key: i32,
++    parsed_statements: HashMap<Cow<'static, str>, Statement>,
+ }
+ 
+ impl Client {
+@@ -202,6 +207,7 @@ impl Client {
+             ssl_mode,
+             process_id,
+             secret_key,
++            parsed_statements: HashMap::new(),
+         }
+     }
+ 
+@@ -214,6 +220,41 @@ impl Client {
+         self.socket_config = Some(socket_config);
+     }
+ 
++    #[inline]
++    pub async fn get_type(&self, oid: Oid) -> Result<Type, Error> {
++        crate::prepare::get_type(&self.inner, oid).await
++    }
++
++    pub async fn prepare_static(&mut self, query: Cow<'static, str>) -> Result<Statement, Error> {
++        match self.parsed_statements.entry(query) {
++            Occupied(stmt) => {
++                log::debug!(
++                    "\x1b[32mstmt \x1b[{}m{:?}\x1b[32m already prepared ! => {:?}\x1b[0m",
++                    match stmt.key() {
++                        Cow::Borrowed(_) => 33,
++                        _ => 36,
++                    },
++                    stmt.key(),
++                    stmt.get() as *const Statement
++                );
++                Ok(stmt.get().clone())
++            }
++            Vacant(pos) => {
++                let stmt = prepare::prepare(&self.inner, pos.key(), &[]).await?;
++                log::debug!(
++                    "\x1b[35mstmt \x1b[{}m{:?}\x1b[35m inserted !\x1b[0m",
++                    match pos.key() {
++                        Cow::Borrowed(_) => 33,
++                        _ => 36,
++                    },
++                    pos.key()
++                );
++                pos.insert(stmt.clone());
++                Ok(stmt)
++            }
++        }
++    }
++
+     /// Creates a new prepared statement.
+     ///
+     /// Prepared statements can be executed repeatedly, and may contain query parameters (indicated by `$1`, `$2`, etc),
+@@ -451,7 +492,7 @@ impl Client {
+         self.simple_query_raw(query).await?.try_collect().await
+     }
+ 
+-    pub(crate) async fn simple_query_raw(&self, query: &str) -> Result<SimpleQueryStream, Error> {
++    pub async fn simple_query_raw(&self, query: &str) -> Result<SimpleQueryStream, Error> {
+         simple_query::simple_query(self.inner(), query).await
+     }
+ 
+diff --git a/src/error/mod.rs b/src/error/mod.rs
+index f1e2644..c140c2a 100644
+--- a/src/error/mod.rs
++++ b/src/error/mod.rs
+@@ -337,7 +337,7 @@ pub enum ErrorPosition {
+ }
+ 
+ #[derive(Debug, PartialEq)]
+-enum Kind {
++pub enum Kind {
+     Io,
+     UnexpectedMessage,
+     Tls,
+@@ -437,7 +437,7 @@ impl Error {
+         self.as_db_error().map(DbError::code)
+     }
+ 
+-    fn new(kind: Kind, cause: Option<Box<dyn error::Error + Sync + Send>>) -> Error {
++    pub fn new(kind: Kind, cause: Option<Box<dyn error::Error + Sync + Send>>) -> Error {
+         Error(Box::new(ErrorInner { kind, cause }))
+     }
+ 
+diff --git a/src/prepare.rs b/src/prepare.rs
+index e3f09a7..ba8d5a4 100644
+--- a/src/prepare.rs
++++ b/src/prepare.rs
+@@ -126,7 +126,7 @@ fn encode(client: &InnerClient, name: &str, query: &str, types: &[Type]) -> Resu
+     })
+ }
+ 
+-async fn get_type(client: &Arc<InnerClient>, oid: Oid) -> Result<Type, Error> {
++pub async fn get_type(client: &Arc<InnerClient>, oid: Oid) -> Result<Type, Error> {
+     if let Some(type_) = Type::from_oid(oid) {
+         return Ok(type_);
+     }

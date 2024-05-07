@@ -75,7 +75,7 @@ struct Args {
 #[derive(clap::Subcommand)]
 enum Commands {
     Ping {
-        #[arg(short, long, num_args=1..)]
+        #[arg(short, long, num_args=1.., required=true)]
         channels: Vec<String>,
     },
     Content,
