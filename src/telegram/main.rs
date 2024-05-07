@@ -3,11 +3,13 @@
     future_join,
     hint_assert_unchecked,
     string_deref_patterns,
-    try_blocks
+    try_blocks,
+    yeet_expr,
 )]
 
 use hashbrown::{HashMap, HashSet};
 
+mod extract;
 mod telegram;
 
 async fn insert_channels<C>(channels: C) -> Result<(), uscr::db::BB8Error>
@@ -77,7 +79,10 @@ enum Commands {
         channels: Vec<String>,
     },
     Content,
-    Extract,
+    Extract {
+        #[arg(short, long, default_value_t = 1024)]
+        limit: u32,
+    },
 }
 
 #[tokio::main]
@@ -130,7 +135,14 @@ async fn main() -> anyhow::Result<()> {
                 telegram::fetch_content(&client, &channel).await?;
             }
         }
-        _ => todo!(),
+        Commands::Extract { limit } => {
+            let mut channels = get_all_channels_from_db().await?;
+            let mut thread_rng = rand::thread_rng();
+            rand::seq::SliceRandom::shuffle(&mut *channels, &mut thread_rng);
+            for channel in channels {
+                extract::extract_content(channel.id, limit).await?;
+            }
+        }
     }
 
     Ok(())

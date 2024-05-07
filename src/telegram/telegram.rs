@@ -211,7 +211,11 @@ impl From<tl::types::Message> for Message {
     }
 }
 
-async fn insert_to_db(messages: Vec<(i32, Message)>, channel_id: i64) -> () {
+async fn insert_to_db(
+    messages: Vec<(i32, Message)>,
+    channel_id: i64,
+    interval: &mut Option<(i32, i32)>,
+) -> Option<i32> {
     async fn insert_to_db_inner(
         messages: Vec<(i32, Message)>,
         channel_id: i64,
@@ -246,12 +250,24 @@ async fn insert_to_db(messages: Vec<(i32, Message)>, channel_id: i64) -> () {
 
     if messages.is_empty() {
         tracing::warn!(target: "telegram-insert-message", "empty batch");
+        None
     } else {
         match insert_to_db_inner(messages, channel_id).await {
             Ok((a, b, c, d)) => {
-                tracing::info!(target: "telegram-insert-message", "{a}/{b} data upserted, id range: [{c}, {d}]")
+                tracing::info!(target: "telegram-insert-message", "{a}/{b} data upserted, id range: [{c}, {d}]");
+                match interval {
+                    Some((l, r)) => {
+                        *l = (*l).min(c);
+                        *r = (*r).max(d);
+                    }
+                    None => *interval = Some((c, d)),
+                }
+                Some(d)
             }
-            Err(e) => tracing::error!(target: "telegram-insert-message", ?e),
+            Err(e) => {
+                tracing::error!(target: "telegram-insert-message", ?e);
+                None
+            }
         }
     }
 }
@@ -265,6 +281,27 @@ pub async fn fetch_content(client: &Client, channel: &Channel) -> Result<(), Inv
         access_hash: (channel.access_hash != 0).then_some(channel.access_hash),
     };
 
+    // compute stop line
+    let interval_origin: Option<(i32, i32)> = try {
+        const SQL: &str =
+            "select min_message_id, max_message_id from telegram.channel where id = $1";
+
+        let mut conn = get_connection().await.ok()?;
+        let stmt = conn.prepare_static(SQL.into()).await.ok()?;
+        let row = conn.query_one(&stmt, &[&channel.id]).await.ok()?;
+
+        let min: i32 = row.try_get(0).ok()?;
+        let max: i32 = row.try_get(1).ok()?;
+
+        if min == 0 && max == 0 {
+            do yeet;
+        } else {
+            (min, max)
+        }
+    };
+    let mut interval = interval_origin;
+    let stop_point = interval.map_or(0, |x| x.1);
+
     let mut iter = client.iter_messages(packed);
     let mut buffer = Vec::new();
     let mut first = true;
@@ -276,18 +313,27 @@ pub async fn fetch_content(client: &Client, channel: &Channel) -> Result<(), Inv
                 first = false;
             } else {
                 let sleep = tokio::time::sleep(const { core::time::Duration::from_millis(180) });
-                let db_fut = insert_to_db(core::mem::take(&mut buffer), channel.id);
-                join!(sleep, db_fut).await;
+                let db_fut = insert_to_db(core::mem::take(&mut buffer), channel.id, &mut interval);
+                if join!(sleep, db_fut)
+                    .await
+                    .1
+                    .is_some_and(|x| x <= stop_point)
+                {
+                    break;
+                }
             }
             iter.next().await
         }?;
-        let Some(message) = item else { break };
+        let Some(message) = item else {
+            insert_to_db(buffer, channel.id, &mut interval).await;
+            break;
+        };
         let message = Message::from(message.into_inner());
 
         buffer.push((message.id, message));
     }
 
-    insert_to_db(buffer, channel.id).await;
+    tracing::info!(target: "telegram-insert-message", "span update (of {}): {:?} => {:?}", channel.id, interval_origin, interval);
 
     Ok(())
 }
