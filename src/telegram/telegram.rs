@@ -63,6 +63,23 @@ pub struct Channel {
     pub access_hash: i64,
 }
 
+pub async fn access_channel(client: &Client, name: &str) -> anyhow::Result<Channel> {
+    tracing::info!(target: "telegram-access-channel", "======== \x1b[32mACCESSING CHANNEL \x1b[36m{name}\x1b[0m ========");
+    let Some(chat) = client.resolve_username(name).await? else {
+        anyhow::bail!("channel {name} not found");
+    };
+
+    let PackedChat {
+        id, access_hash, ..
+    } = chat.pack();
+
+    Ok(Channel {
+        id,
+        name: chat.username().unwrap_or_else(|| chat.name()).to_owned(),
+        access_hash: access_hash.unwrap_or(0),
+    })
+}
+
 pub async fn fetch_channels<C>(
     client: &Client,
     channels: C,
@@ -262,10 +279,7 @@ pub async fn fetch_content(client: &Client, channel: &Channel) -> Result<(), Inv
                 let db_fut = insert_to_db(core::mem::take(&mut buffer), channel.id);
                 join!(sleep, db_fut).await;
             }
-            println!("s");
-            let t = iter.next().await;
-            println!("e");
-            t
+            iter.next().await
         }?;
         let Some(message) = item else { break };
         let message = Message::from(message.into_inner());
