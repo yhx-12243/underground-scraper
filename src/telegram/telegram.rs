@@ -267,7 +267,8 @@ async fn insert_to_db(
                 let e: DBResult<()> = try {
                     const SQL: &str = "update telegram.channel set min_message_id = $1, max_message_id = $2 where id = $3";
                     let stmt = conn.prepare_static(SQL.into()).await?;
-                    conn.execute(&stmt, &[&inner.0, &inner.1, &channel_id]).await?;
+                    conn.execute(&stmt, &[&inner.0, &inner.1, &channel_id])
+                        .await?;
                 };
                 if let Err(e) = e {
                     tracing::error!(target: "telegram-insert-message", ?e);

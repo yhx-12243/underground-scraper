@@ -15,13 +15,21 @@ The whole project is written in [Rust](https://www.rust-lang.org/) (mainly).
 
 ## Global Environment Variables
 
-Use [PostgreSQL](https://www.postgresql.org/),
+We use [PostgreSQL](https://www.postgresql.org/) for our data storage and management, and all the program requires the following environment of PostgreSQL:
 
 ```sh
-DB_HOST_PATH=/var/run/postgresql
-DB_USER=postgres
-DB_NAME=postgres
-DB_PASSWORD=<password> # optional
+export DB_HOST_PATH=/var/run/postgresql
+export DB_USER=postgres
+export DB_NAME=postgres
+export DB_PASSWORD=<password> # optional
+```
+
+**Note**: We use this environment **in `cargo build` process**.
+
+Besides, we use [`log`](https://crates.io/crates/log) and [`tracing`](https://crates.io/crates/tracing) for debugging and logging, so it's better to turn the `RUST_LOG` on:
+
+```sh
+export RUST_LOG=info
 ```
 
 ## Patches
@@ -38,7 +46,7 @@ CREATE SCHEMA blackhatworld;
 CREATE TABLE blackhatworld.content (
     id bigint NOT NULL,
     content text NOT NULL,
-	PRIMARY KEY (id)
+    PRIMARY KEY (id)
 );
 
 CREATE TABLE blackhatworld.posts (
@@ -51,7 +59,7 @@ CREATE TABLE blackhatworld.posts (
     views bigint NOT NULL,
     last_reply timestamp without time zone NOT NULL,
     section bigint NOT NULL,
-	PRIMARY KEY (id)
+    PRIMARY KEY (id)
 );
 ```
 
@@ -93,7 +101,7 @@ CREATE TABLE accs.market (
     description text NOT NULL,
     quantity bigint NOT NULL,
     price double precision NOT NULL,
-	PRIMARY KEY (id, "time")
+    PRIMARY KEY (id, "time")
 );
 ```
 
@@ -113,7 +121,7 @@ CREATE SCHEMA ezkify;
 CREATE TABLE ezkify.categories (
     id bigint NOT NULL,
     "desc" text NOT NULL,
-	PRIMARY KEY (id, "time"),
+    PRIMARY KEY (id, "time"),
 );
 
 CREATE TABLE ezkify.items (
@@ -125,8 +133,8 @@ CREATE TABLE ezkify.items (
     min_order bigint NOT NULL,
     max_order bigint NOT NULL,
     description text NOT NULL,
-	PRIMARY KEY (id, "time"),
-	FOREIGN KEY (category_id) REFERENCES ezkify.categories(id)
+    PRIMARY KEY (id, "time"),
+    FOREIGN KEY (category_id) REFERENCES ezkify.categories(id)
 );
 ```
 
@@ -143,8 +151,8 @@ CREATE TABLE ezkify.items (
 See Telegram's [Apps](https://my.telegram.org/apps) page to register and get your `api_id` and `api_hash`.
 
 ```sh
-TG_ID=<telegram api_id>
-TG_HASH=<telegram api_hash>
+export TG_ID=<telegram api_id>
+export TG_HASH=<telegram api_hash>
 ```
 
 ### SQL Schema
@@ -158,7 +166,7 @@ CREATE TABLE telegram.channel (
     min_message_id integer NOT NULL,
     max_message_id integer NOT NULL,
     access_hash bigint NOT NULL,
-	PRIMARY KEY (id)
+    PRIMARY KEY (id)
 );
 
 CREATE TABLE telegram.message (
@@ -166,7 +174,7 @@ CREATE TABLE telegram.message (
     message_id integer NOT NULL,
     channel_id bigint NOT NULL,
     data jsonb NOT NULL,
-	PRIMARY KEY (id)
+    PRIMARY KEY (id)
 );
 
 CREATE INDEX channel_name_lower_idx ON telegram.channel USING btree (lower(name));
