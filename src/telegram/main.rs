@@ -18,7 +18,7 @@ where
 {
     use uscr::db::get_connection;
 
-    const SQL: &str = "insert into telegram.channel (id, name, min_message_id, max_message_id, access_hash) values ($1, $2, 0, 0, $3) on conflict (id) do update set name = excluded.name, access_hash = excluded.access_hash";
+    const SQL: &str = "insert into telegram.channel (id, name, min_message_id, max_message_id, access_hash, last_fetch) values ($1, $2, 0, 0, $3, (now() at time zone 'UTC') - interval '1 day') on conflict (id) do update set name = excluded.name, access_hash = excluded.access_hash";
 
     let mut conn = get_connection().await?;
     let stmt = conn.prepare_static(SQL.into()).await?;
@@ -45,7 +45,7 @@ where
 async fn get_all_channels_from_db() -> Result<Vec<telegram::Channel>, uscr::db::BB8Error> {
     use uscr::db::get_connection;
 
-    const SQL: &str = "select id, name, access_hash from telegram.channel";
+    const SQL: &str = "select id, name, access_hash from telegram.channel order by last_fetch";
 
     let mut conn = get_connection().await?;
     let stmt = conn.prepare_static(SQL.into()).await?;
@@ -78,7 +78,10 @@ enum Commands {
         #[arg(short, long, num_args=1.., required=true)]
         channels: Vec<String>,
     },
-    Content,
+    Content {
+        #[arg(short, long, num_args=1.., value_parser=clap::value_parser!(i64).range(0..))]
+        channels: Vec<i64>,
+    },
     Extract {
         #[arg(short, long, default_value_t = 1024)]
         limit: u32,
@@ -127,12 +130,16 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("{channels:#?}");
             insert_channels(channels.into_values()).await?;
         }
-        Commands::Content => {
+        Commands::Content {
+            channels: channels_filt,
+        } => {
             let mut channels = get_all_channels_from_db().await?;
-            let mut thread_rng = rand::thread_rng();
-            rand::seq::SliceRandom::shuffle(&mut *channels, &mut thread_rng);
+            if !channels_filt.is_empty() {
+                let filt = channels_filt.into_iter().collect::<HashSet<i64>>();
+                channels.retain(|channel| filt.contains(&channel.id));
+            }
             for channel in channels {
-                telegram::fetch_content(&client, &channel).await?;
+                telegram::fetch_content(&client, &channel).await;
             }
         }
         Commands::Extract { limit } => {
@@ -145,5 +152,5 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    Ok(())
+    telegram::save(&client).map_err(Into::into)
 }

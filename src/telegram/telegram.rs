@@ -265,7 +265,7 @@ async fn insert_to_db(
                     None => interval.insert((min, max)),
                 };
                 let e: DBResult<()> = try {
-                    const SQL: &str = "update telegram.channel set min_message_id = $1, max_message_id = $2 where id = $3";
+                    const SQL: &str = "update telegram.channel set min_message_id = $1, max_message_id = $2,     last_fetch = now() at time zone 'UTC' where id = $3";
                     let stmt = conn.prepare_static(SQL.into()).await?;
                     conn.execute(&stmt, &[&inner.0, &inner.1, &channel_id])
                         .await?;
@@ -283,7 +283,7 @@ async fn insert_to_db(
     }
 }
 
-pub async fn fetch_content(client: &Client, channel: &Channel) -> Result<(), InvocationError> {
+pub async fn fetch_content(client: &Client, channel: &Channel) {
     tracing::info!(target: "telegram-insert-message", "======== \x1b[32mFETCHING CONTENT \x1b[36m{}\x1b[0m ========", channel.id);
 
     let packed = PackedChat {
@@ -315,26 +315,32 @@ pub async fn fetch_content(client: &Client, channel: &Channel) -> Result<(), Inv
 
     let mut iter = client.iter_messages(packed);
     let mut buffer = Vec::new();
-    let mut first = true;
-    loop {
-        let item = if let Some(raw) = iter.next_raw() {
-            raw
-        } else {
-            if first {
-                first = false;
+    'outer: loop {
+        let item = loop {
+            let item = if let Some(raw) = iter.next_raw() {
+                raw
             } else {
-                let sleep = tokio::time::sleep(const { core::time::Duration::from_millis(180) });
-                let db_fut = insert_to_db(core::mem::take(&mut buffer), channel.id, &mut interval);
-                if join!(sleep, db_fut)
-                    .await
-                    .1
-                    .is_some_and(|x| x <= stop_point)
-                {
-                    break;
+                if !buffer.is_empty() {
+                    let sleep = tokio::time::sleep(const { core::time::Duration::from_millis(180) });
+                    let db_fut = insert_to_db(core::mem::take(&mut buffer), channel.id, &mut interval);
+                    if join!(sleep, db_fut)
+                        .await
+                        .1
+                        .is_some_and(|x| x <= stop_point)
+                    {
+                        break 'outer;
+                    }
                 }
-            }
-            iter.next().await
-        }?;
+                iter.next().await
+            };
+            match item {
+                Ok(item) => break item,
+                Err(e) => {
+                    tracing::error!(target: "telegram-fetch-message", ?e);
+                    tokio::time::sleep(const { core::time::Duration::from_secs(1) }).await;
+                }
+            };
+        };
         let Some(message) = item else {
             insert_to_db(buffer, channel.id, &mut interval).await;
             break;
@@ -345,6 +351,4 @@ pub async fn fetch_content(client: &Client, channel: &Channel) -> Result<(), Inv
     }
 
     tracing::info!(target: "telegram-insert-message", "span update (of {}): {:?} => {:?}", channel.id, interval_origin, interval);
-
-    Ok(())
 }

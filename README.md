@@ -275,6 +275,7 @@ CREATE TABLE telegram.channel (
     min_message_id integer NOT NULL,
     max_message_id integer NOT NULL,
     access_hash bigint NOT NULL,
+    last_fetch timestamp without time zone NOT NULL,
     PRIMARY KEY (id)
 );
 
