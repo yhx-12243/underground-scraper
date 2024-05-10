@@ -28,7 +28,7 @@ mod constants {
         };
     }
 
-    pub const HOST_PATH: &str = env_or_default!("DB_HOST_PATH", "/var/run/postgresql");
+    pub const HOST: &str = env_or_default!("DB_HOST", "/var/run/postgresql");
     pub const USER: &str = env_or_default!("DB_USER", "postgres");
     pub const DBNAME: &str = env_or_default!("DB_NAME", "postgres");
     pub const PASSWORD: Option<&str> = option_env!("DB_PASSWORD");
@@ -36,11 +36,11 @@ mod constants {
 }
 
 pub async fn init_db() {
-    use constants::{CONNECTION_TIMEOUT, DBNAME, HOST_PATH, PASSWORD, USER};
+    use constants::{CONNECTION_TIMEOUT, DBNAME, HOST, PASSWORD, USER};
 
     let mut config = tokio_postgres::Config::new();
     config
-        .host_path(HOST_PATH)
+        .host_path(HOST)
         .user(USER)
         .dbname(DBNAME)
         .connect_timeout(CONNECTION_TIMEOUT);

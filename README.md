@@ -34,7 +34,7 @@ The other dependencies will download when building by *Cargo*, please keep the n
 Since we use PostgreSQL for our data storage and management, and all the program requires the following environment of PostgreSQL, please **set/change them based your actual condition**:
 
 ```sh
-export DB_HOST_PATH=/var/run/postgresql
+export DB_HOST=/var/run/postgresql
 export DB_USER=postgres
 export DB_NAME=postgres
 export DB_PASSWORD=<password> # optional
@@ -50,21 +50,21 @@ export RUST_LOG=info
 
 ### Patches
 
-We have some patch files for some Rust third-party libraries, they lie in `./patches/*.patch` directory, **you should apply them before compiling**.
+We have some patch files for some Rust third-party libraries, they lie in [`./patches/*.patch`](./patches) directory, **you should apply them before compiling**.
 
 If you don't know how to apply them, here is a stupid method to apply (although it is not so robust):
 
 ```sh
 # at a cleaning state
 
-aply() {
-	git -C ~/.cargo/registry/src/index.crates.io-*/$1-$2 apply --reject $PWD/patches/$1.patch
+apply_() {
+	git -C ~/.cargo/registry/src/index.crates.io-6f17d22bba15001f/$1-$2 apply --reject $PWD/patches/$1.patch
 }
 
 cargo fetch
-aply postgres-types 0.2.6
-aply tokio-postgres 0.7.10
-git -C ~/.cargo/git/checkouts/grammers-*/6e13715 apply --reject $PWD/patches/grammers.patch
+apply_ postgres-types 0.2.6
+apply_ tokio-postgres 0.7.10
+git -C ~/.cargo/git/checkouts/grammers-689e30b82f69dcd5/4717cd0 apply --reject $PWD/patches/grammers.patch
 
 # then you can run `cargo build -r`.
 ```
@@ -77,15 +77,15 @@ Plus, we will briefly describe the methodology of each scraper, in order to help
 
 ---
 
-First, you should run `cargo build` or `cargo build -r` ([`-r` means release mode](https://doc.rust-lang.org/cargo/commands/cargo-build.html#option-cargo-build--r)) to build all of the binaries.
+First, you should run `cargo build [-r]` ([`-r` means release mode](https://doc.rust-lang.org/cargo/commands/cargo-build.html#option-cargo-build--r)) to build all of the binaries.
 
 If your build fails with errors, it's likely that you skipped [the step of patch applying](#patches) or did not perform it correctly, please check it out again.
 
-When the build succeeds, you can run `cargo run [-r] --bin <name> -- <args>` to start these scrapers. For convenience, we use `./foo <args>` to simply denote `cargo run -r --bin foo -- <args>` (of course you can copy the binary into working directory).
+When the build succeeds, you can run `cargo run -r --bin <name> -- <args>` to start these scrapers. For convenience, we use `./foo <args>` to simply denote `cargo run -r --bin foo -- <args>` (of course you can copy the binary into working directory).
 
 ---
 
-[AccsMarket](#accsmarket) and [EZKIFY Services](#ezkify-services) Services have a relatively weak defense system, so we just use `reqwest` to interchange packets and use `scraper` to parse data. It is completely one-click.
+[AccsMarket](#accsmarket) and [EZKIFY Services](#ezkify-services) have a relatively weak defense system, so we just use `reqwest` to interchange packets and use `scraper` to parse data. It is completely one-click.
 
 [BlackHatWorld](#blackhatworld) has a stronger defense system involving [Cloudflare](https://www.cloudflare.com/), so we use the [ChromeDriver](https://chromedriver.chromium.org/)/[puppeteer](https://pptr.dev/) technique, assisting manual verification to scrape data efficiently.
 
@@ -116,6 +116,8 @@ CREATE TABLE accs.market (
 ```sh
 ./accsmarket
 ```
+
+It will automatically scrape all the data from https://accsmarket.com/ into the created database, the whole process takes about 40 ~ 60 secs.
 
 ### EZKIFY Services
 
@@ -152,6 +154,8 @@ CREATE TABLE ezkify.items (
 ./ezkify
 ```
 
+It will automatically scrape all the data from https://ezkify.com/services into the created database, the whole process takes about 10 ~ 20 secs.
+
 ### BlackHatWorld
 
 #### SQL Schema
@@ -187,9 +191,33 @@ CREATE TABLE blackhatworld.posts (
 ./blackhatworld
 ```
 
+This program is written by Rust with `fantoccini` (the Rust version of WebDriver), so you should launch your `chromedriver` (just default parameters, port 9515) before running.
+
+Then you will see a Chrome page open. With a certain probability, the Chrome will popup a Cloudflare verifying page and you should solve it manually or refresh page several times.
+
+Once you solve it, the remaining process is automatic and it will take about 2 ~ 4 minutes to track newer posts (of course the first time will be extreme longer if your initial database is empty).
+
+[`src/blackhatworld/main.rs`](./src/blackhatworld/main.rs) contains the name of the forums it will scrape. You can change them freely.
+
 #### Scraping Content
 
-We use `work.mjs` file (in Node.js) for content scraping.
+##### Introduction
+
+Content scraping is a relatively harder task since we can scrape posts twenty-by-twenty but content scraping can only be done one by one.
+
+Therefore, we use external proxy to improve the efficiency (currently my database contains $1.6 \times 10^5$ posts, about $5\,\mathrm{GB}$).
+
+First of all, you should run the [posts-list-scraper](#scraping-posts-list), in order to let the following scraper know which posts (with ID) we need.
+
+Then we use a local server technique —— We built a local server to handle the functionality of ``result uploading``, it plays a role as gateway, which means that we can write different kinds of scrapers (in different ways), and all of the data will send to our local server in a simple (and unified) format.
+These scrapers can written in various languages and we avoid sticking lower into databases.
+The server also has the functions like "load balancing", different scrapers (workers) first request to it to get the disjoint work, and do them themselves, finally upload to server, thus ensures the efficient use of resources.
+
+##### Usage
+
+We can use `./hackforums-inner` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward it to HTTP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/hackforums-inner/main.rs#L55).
+
+Then we can use `GET /get/black` and `POST /send/black` (with JSON `{ id, content }`) to fetch and upload works, and we use `work.mjs` file (in Node.js) for sample content scraping.
 
 Before running this file, you should run
 ```sh
@@ -197,13 +225,31 @@ npm i --no-save puppeteer
 ```
 to install the corresponding requirement for the script.
 
+To scrape fluently, we should prepare some headers, namely (`Cookie`, `User-Agent`) pairs, one can run
 ```sh
 ./work.mjs 10001
 ```
+(10001 is the port number of the corresponding proxy) to create a Chrome, and once it pass the Cloudflare verification, we use the Network tool to record their `Cookie` and `User-Agent`, these value can use for a long while (about 1 day).
 
+Finally we create a JSON file, for example `headers.json` with following contents:
+```json
+{
+	"10001": { // port number
+		"Cookie": "cf_clearance=...; ...",
+		"User-Agent": "Mozilla/5.0 (...) ..."
+	},
+    "10002": {
+        ...
+    },
+    ...
+}
+```
+
+Once you've collected enough headers, you can run
 ```sh
 ./work.mjs headers.json
 ```
+to start formal scraping (it's fascinating!) and checking whether your headers work or not. It takes about 4~6 hours to get 160k data (and it may be faster!).
 
 ### Telegram
 

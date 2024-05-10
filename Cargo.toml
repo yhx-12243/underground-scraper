@@ -8,7 +8,7 @@ edition = "2024"
 [dependencies]
 actix-cors = { version = "0.7.0", features = ["draft-private-network-access"] }
 actix-web = "4.5.1"
-anyhow = { version = "1.0.82", features = ["backtrace"] }
+anyhow = { version = "1.0.83", features = ["backtrace"] }
 bb8-postgres = { version = "0.8.1", features = ["with-serde_json-1"] }
 bytes = { version = "1.6.0", features = ["serde"] }
 clap = { version = "4.5.4", features = ["derive", "unicode", "wrap_help", "env", "string", "unstable-v5"] }
@@ -31,8 +31,8 @@ rand = { version = "0.8.5", features = ["log", "nightly"] }
 regex = "1.10.4"
 reqwest = { version = "0.12.4", features = ["json"] }
 scraper = "0.19.0"
-serde = { version = "1.0.200", features = ["derive"] }
-serde_json = { version = "1.0.115", features = ["float_roundtrip"] }
+serde = { version = "1.0.201", features = ["derive"] }
+serde_json = { version = "1.0.117", features = ["float_roundtrip"] }
 tokio = { version = "1.37.0", features = ["macros", "parking_lot", "rt-multi-thread", "tracing"] }
 tokio-postgres = { version = "0.7.10", features = ["with-serde_json-1"] }
 tracing = { version = "0.1.40", features = ["log", "release_max_level_info"] }
