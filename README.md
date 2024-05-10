@@ -195,7 +195,7 @@ This program is written by Rust with `fantoccini` (the Rust version of WebDriver
 
 Then you will see a Chrome page open. With a certain probability, the Chrome will popup a Cloudflare verifying page and you should solve it manually or refresh page several times.
 
-Once you solve it, the remaining process is automatic and it will take about 2 ~ 4 minutes to track newer posts (of course the first time will be extreme longer if your initial database is empty).
+<a id="update-mode" name="update-mode"></a>Once you solve it, the remaining process is automatic and it will take about 2 ~ 4 minutes to track newer posts (of course the first time will be extreme longer if your initial database is empty).
 
 [`src/blackhatworld/main.rs`](./src/blackhatworld/main.rs) contains the name of the forums it will scrape. You can change them freely.
 
@@ -234,10 +234,10 @@ To scrape fluently, we should prepare some headers, namely (`Cookie`, `User-Agen
 Finally we create a JSON file, for example `headers.json` with following contents:
 ```json
 {
-	"10001": { // port number
-		"Cookie": "cf_clearance=...; ...",
-		"User-Agent": "Mozilla/5.0 (...) ..."
-	},
+    "10001": { // port number
+        "Cookie": "cf_clearance=...; ...",
+        "User-Agent": "Mozilla/5.0 (...) ..."
+    },
     "10002": {
         ...
     },
@@ -293,14 +293,22 @@ CREATE INDEX ON telegram.message (channel_id, message_id);
 
 #### Usage
 
+First, you should collect channels/groups as many as possible. Run
 ```sh
 ./telegram ping <channels, both id and username accepted>
 ```
+to add the credentials of the channels to the database.
+
+---
 
 ```sh
 ./telegram content
 ```
+This command is aim to collecting (and updating) the content in corresponding channels, it is also worked as a updating mode, just like [this](#update-mode).
+
+---
 
 ```sh
 ./telegram extract
 ```
+This command is aim to extract in scraped content to extract more Telegram links and do a cycle to further scraping.
