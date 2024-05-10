@@ -21,7 +21,7 @@ These project contain a collection of scraper of common underground forums as we
 The project has following requirements:
 
 * A Rust toolchain in a `nightly` version (not too old, 1.75+ is sufficient),
-* A [Node.js](https://my.telegram.org/apps) running environment (not too old, v20+ is OK),
+* A [Node.js](https://nodejs.org/) running environment (not too old, v20+ is OK),
 * A [PostgreSQL](https://www.postgresql.org/) client (and server, if you don't have, v14+ is OK).
 * A [ChromeDriver](https://chromedriver.chromium.org/), listening on port 9515 (default), as new as possible (120+ is OK).
 
@@ -205,7 +205,7 @@ Then you will see a Chrome page open. With a certain probability, the Chrome wil
 
 Content scraping is a relatively harder task since we can scrape posts twenty-by-twenty but content scraping can only be done one by one.
 
-Therefore, we use external proxy to improve the efficiency (currently my database contains $1.6 \times 10^5$ posts, about $5\,\mathrm{GB}$).
+Therefore, we use external proxy to improve the efficiency (currently my database contains $1.6 \times 10^5$ posts, about $5\\,\mathrm{GB}$).
 
 First of all, you should run the [posts-list-scraper](#scraping-posts-list), in order to let the following scraper know which posts (with ID) we need.
 
@@ -215,9 +215,11 @@ The server also has the functions like "load balancing", different scrapers (wor
 
 ##### Usage
 
-We can use `./hackforums-inner` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward it to HTTP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/hackforums-inner/main.rs#L55).
+We can use `./hackforums-inner` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward it to TCP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/hackforums-inner/main.rs#L55)[^1].
 
-Then we can use `GET /get/black` and `POST /send/black` (with JSON `{ id, content }`) to fetch and upload works, and we use `work.mjs` file (in Node.js) for sample content scraping.
+[^1]: Anyway, as long as one can access the server in the same manner (TCP port / socket), then it will work. For example, the `work.mjs` uses the TCP port 18322 in localhost.
+
+Then we can use `GET /get/black` and `POST /send/black` (with JSON `{ id, content }`) to fetch and upload works, and we use [`work.mjs`](./work.mjs) file (in Node.js) for sample content scraping.
 
 Before running this file, you should run
 ```sh
