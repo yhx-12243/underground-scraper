@@ -1,8 +1,6 @@
 #![feature(
     const_int_from_str,
     future_join,
-    hint_assert_unchecked,
-    string_deref_patterns,
     try_blocks,
     yeet_expr,
 )]

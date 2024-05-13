@@ -21,9 +21,9 @@ These project contain a collection of scraper of common underground forums as we
 The project has following requirements:
 
 * A Rust toolchain in a `nightly` version (not too old, 1.75+ is sufficient),
-* A [Node.js](https://nodejs.org/) running environment (not too old, v20+ is OK),
 * A [PostgreSQL](https://www.postgresql.org/) client (and server, if you don't have, v14+ is OK).
-* A [ChromeDriver](https://chromedriver.chromium.org/), listening on port 9515 (default), as new as possible (120+ is OK).
+* A Chrome/Edge Browser, as new as possible (120+ is OK).
+* (Optional) A Python 3 running environment (3.10+ is OK).
 
 The other dependencies will download when building by *Cargo*, please keep the network connection well.
 
@@ -52,22 +52,9 @@ export RUST_LOG=info
 
 We have some patch files for some Rust third-party libraries, they lie in [`./patches/*.patch`](./patches) directory, **you should apply them before compiling**.
 
-If you don't know how to apply them, here is a stupid method to apply (although it is not so robust):
+If you don't know how to apply them, you can just run the script `./apply_patch.py` to finish (although it may not be so robust but it usually works fine).
 
-```sh
-# at a cleaning state
-
-apply_() {
-	git -C ~/.cargo/registry/src/index.crates.io-6f17d22bba15001f/$1-$2 apply --reject $PWD/patches/$1.patch
-}
-
-cargo fetch
-apply_ postgres-types 0.2.6
-apply_ tokio-postgres 0.7.10
-git -C ~/.cargo/git/checkouts/grammers-689e30b82f69dcd5/4717cd0 apply --reject $PWD/patches/grammers.patch
-
-# then you can run `cargo build -r`.
-```
+In addition, all the patch we write are mild (compatible), namely, any program can pass without patch will always pass with patch and produce the same result. For example, we only make some private interface public, or add some interfaces.
 
 ## Scrapers
 
@@ -87,7 +74,7 @@ When the build succeeds, you can run `cargo run -r --bin <name> -- <args>` to st
 
 [AccsMarket](#accsmarket) and [EZKIFY Services](#ezkify-services) have a relatively weak defense system, so we just use `reqwest` to interchange packets and use `scraper` to parse data. It is completely one-click.
 
-[BlackHatWorld](#blackhatworld) has a stronger defense system involving [Cloudflare](https://www.cloudflare.com/), so we use the [ChromeDriver](https://chromedriver.chromium.org/)/[puppeteer](https://pptr.dev/) technique, assisting manual verification to scrape data efficiently.
+[BlackHatWorld](#blackhatworld) has a stronger defense system involving [Cloudflare](https://www.cloudflare.com/), so we use the [ChromeDriver](https://chromedriver.chromium.org/) technique, assisting manual verification to scrape data efficiently.
 
 [Telegram](#telegram) is a multifunctional CLI program which integrates many way to scrape channels/messages and analyze data. It uses the [Telegram API](https://core.telegram.org/) to deal with and work.
 
@@ -219,17 +206,11 @@ We can use `./hackforums-inner` to start the server. The server listen on the UN
 
 [^1]: Anyway, as long as one can access the server in the same manner (TCP port / socket), then it will work. For example, the `work.mjs` uses the TCP port 18322 in localhost.
 
-Then we can use `GET /get/black` and `POST /send/black` (with JSON `{ id, content }`) to fetch and upload works, and we use [`work.mjs`](./work.mjs) file (in Node.js) for sample content scraping.
-
-Before running this file, you should run
-```sh
-npm i --no-save puppeteer
-```
-to install the corresponding requirement for the script.
+Then we can use `GET /get/black` and `POST /send/black` (with JSON `{ id, content }`) to fetch and upload works, and we use [`blackhatworld-worker`] for sample content scraping.
 
 To scrape fluently, we should prepare some headers, namely (`Cookie`, `User-Agent`) pairs, one can run
 ```sh
-./work.mjs 10001
+./blackhatworld-worker config 10001
 ```
 (10001 is the port number of the corresponding proxy) to create a Chrome, and once it pass the Cloudflare verification, we use the Network tool to record their `Cookie` and `User-Agent`, these value can use for a long while (about 1 day).
 
@@ -249,7 +230,7 @@ Finally we create a JSON file, for example `headers.json` with following content
 
 Once you've collected enough headers, you can run
 ```sh
-./work.mjs headers.json
+./blackhatworld-worker work headers.json
 ```
 to start formal scraping (it's fascinating!) and checking whether your headers work or not. It takes about 4~6 hours to get 160k data (and it may be faster!).
 

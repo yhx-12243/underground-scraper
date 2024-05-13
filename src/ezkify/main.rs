@@ -128,19 +128,16 @@ async fn main() -> anyhow::Result<()> {
                 continue;
             };
 
-            let description = if let Some(dnone) = cells[5].select(&sel_dnone).next() {
-                let mut s = String::new();
+            let mut description = String::new();
+            if let Some(dnone) = cells[5].select(&sel_dnone).next() {
                 for node in dnone.children() {
                     match node.value() {
-                        scraper::Node::Text(text) => s.push_str(text),
-                        scraper::Node::Element(elem) if elem.name() == "br" => s.push('\n'),
+                        scraper::Node::Text(text) => description.push_str(text),
+                        scraper::Node::Element(elem) if elem.name() == "br" => description.push('\n'),
                         _ => (),
                     }
                 }
-                s
-            } else {
-                String::new()
-            };
+            }
 
             insert_db(
                 &mut conn,

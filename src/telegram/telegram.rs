@@ -30,7 +30,7 @@ pub async fn get_client() -> anyhow::Result<Client> {
 }
 
 pub async fn login(client: &Client) -> anyhow::Result<()> {
-    let mut phone = String::new();
+    let mut phone = String::with_capacity(32);
     while !client.is_authorized().await? {
         if phone.is_empty() {
             let mut stdout = stdout();
@@ -40,7 +40,7 @@ pub async fn login(client: &Client) -> anyhow::Result<()> {
         }
         let token = client.request_login_code(phone.trim()).await?;
 
-        let mut code = String::new();
+        let mut code = String::with_capacity(32);
         {
             let mut stdout = stdout();
             stdout.write_all(b"Please enter the code you received: ")?;
@@ -314,7 +314,7 @@ pub async fn fetch_content(client: &Client, channel: &Channel) {
     let stop_point = interval.map_or(0, |x| x.1);
 
     let mut iter = client.iter_messages(packed);
-    let mut buffer = Vec::new();
+    let mut buffer = Vec::with_capacity(100);
     'outer: loop {
         let item = loop {
             let item = if let Some(raw) = iter.next_raw() {
