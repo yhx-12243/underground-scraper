@@ -21,6 +21,7 @@ grammers-client = { git = "https://github.com/Lonami/grammers" }
 grammers-session = { git = "https://github.com/Lonami/grammers" }
 grammers-tl-types = { git = "https://github.com/Lonami/grammers" }
 hashbrown = { version = "0.14.5", features = ["serde"] }
+headless_chrome = "1.0.10"
 httpdate = "1.0.3"
 indicatif = { version = "0.17.8", features = ["improved_unicode"] }
 log = { version = "0.4.21", features = ["release_max_level_info"] }

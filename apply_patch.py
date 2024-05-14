@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import hashlib
-from argparse import ArgumentParser, HelpFormatter
+from argparse import ArgumentParser
 from enum import Enum
 from pathlib import Path
 from shutil import rmtree
@@ -41,7 +41,7 @@ def patch_inner(patch, path, is_std=False):
         try:
             with open(path / fn) as f:
                 ct = f.read()
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             return ha.count('0') == len(ha)
         h = hashlib.sha1()
         ct = ct.encode()

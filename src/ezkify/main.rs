@@ -50,9 +50,7 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;
 
-    let client = reqwest::Client::builder()
-        .connect_timeout(const { core::time::Duration::from_secs(5) })
-        .build()?;
+    let client = uscr::scrape::basic()?;
 
     tracing::info!(target: "main", "start fetching ...");
     let res = client.get("https://ezkify.com/services").send().await?;
@@ -93,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
 
             let Some(id) = cells[0]
                 .attr("data-filter-table-service-id")
-                .and_then(|x| x.parse::<i64>().ok())
+                .and_then(|x| x.parse().ok())
             else {
                 tracing::warn!(target: "main", "id error: {}", cells[0].html());
                 continue;
@@ -104,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
                 .map(str::trim)
                 .collect::<String>()
                 .strip_prefix('$')
-                .and_then(|x| x.parse::<f64>().ok())
+                .and_then(|x| x.parse().ok())
             else {
                 tracing::warn!(target: "main", "rate error: {}", cells[1].html());
                 continue;
@@ -113,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
                 .text()
                 .map(|c| c.replace(char::is_whitespace, ""))
                 .collect::<String>()
-                .parse::<i64>()
+                .parse()
             else {
                 tracing::warn!(target: "main", "min_order error: {}", cells[3].html());
                 continue;
@@ -122,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
                 .text()
                 .map(|c| c.replace(char::is_whitespace, ""))
                 .collect::<String>()
-                .parse::<i64>()
+                .parse()
             else {
                 tracing::warn!(target: "main", "max_order error: {}", cells[4].html());
                 continue;

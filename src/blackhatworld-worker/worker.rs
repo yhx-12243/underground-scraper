@@ -8,7 +8,7 @@ use reqwest::{
 };
 use serde::Serialize;
 
-use crate::ConfigHeaders;
+use crate::{ConfigHeaders, PROXY_HOST, PROXY_PASSWORD, PROXY_USERNAME};
 
 pub struct Worker {
     pub client_port: u16,
@@ -16,10 +16,6 @@ pub struct Worker {
     pub headers: ConfigHeaders,
     pub gateway: Client,
 }
-
-const PROXY_HOST: Option<&str> = option_env!("PROXY_HOST");
-const PROXY_USERNAME: Option<&str> = option_env!("PROXY_USERNAME");
-const PROXY_PASSWORD: Option<&str> = option_env!("PROXY_PASSWORD");
 
 impl Worker {
     fn build_proxy(&self) -> Option<Proxy> {
@@ -113,7 +109,7 @@ impl Worker {
                         .await?
                 };
                 let sleep = match response {
-                    Ok(text) if Worker::simple_check(&text) => {
+                    Ok(text) if Self::simple_check(&text) => {
                         loop {
                             match self.submit(work, &text).await {
                                 Ok(result) if result.is_empty() => {

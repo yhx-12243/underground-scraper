@@ -1,4 +1,5 @@
 use fantoccini::{error::NewSessionError, Client, ClientBuilder};
+use headless_chrome::{Browser, LaunchOptions};
 
 pub const USER_AGENTS: [&str; 19] = [
 	"Mozilla/5.0 (Linux; Android 8.1.0; Moto G (4)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 PTST/240201.144844",
@@ -23,7 +24,12 @@ pub const USER_AGENTS: [&str; 19] = [
 	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 ];
 
-#[allow(unused)]
+pub fn basic() -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .connect_timeout(const { core::time::Duration::from_secs(5) })
+        .build()
+}
+
 pub async fn get_driver(headless: bool) -> Result<Client, NewSessionError> {
     let mut builder = ClientBuilder::native();
     if headless {
@@ -38,4 +44,12 @@ pub async fn get_driver(headless: bool) -> Result<Client, NewSessionError> {
         );
     }
     builder.connect("http://localhost:9515").await
+}
+
+pub fn puppeteer(headless: bool, proxy: Option<String>) -> anyhow::Result<Browser> {
+    Browser::new(LaunchOptions {
+        headless,
+        proxy_server: proxy.as_deref(),
+        ..LaunchOptions::default()
+    })
 }
