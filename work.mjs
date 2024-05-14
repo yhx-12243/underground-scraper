@@ -1,16 +1,6 @@
 #!/usr/bin/env node
 
-import { execFile } from 'child_process';
-import { readFileSync } from 'fs';
-import { request as httpRequest } from 'http';
-import { Agent as httpsAgent, get as httpsGet, request as httpsRequest } from 'https';
-import { promisify } from 'util';
-
 import puppeteer from 'puppeteer';
-
-const
-	execInner = promisify(execFile),
-	sleep = ms => new Promise(f => setTimeout(f, ms));
 
 const UAs = [
 	'Mozilla/5.0 (Linux; Android 8.1.0; Moto G (4)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 PTST/240201.144844',
@@ -40,131 +30,6 @@ const credential = {
 	password: '9UpIpneGWy8zabx47o',
 }, auth = Buffer.from(`${credential.username}:${credential.password}`).toString('base64');
 
-function request(config) {
-	let fulfill = () => { };
-	const req = (config.protocol.includes('https') ? httpsRequest : httpRequest)(config, res => {
-		const buffers = [];
-		res.on('data', chunk => buffers.push(chunk));
-		res.on('end', () => fulfill([res.headers, Buffer.concat(buffers)]));
-	});
-	if (config.end) req.end();
-	const promise = new Promise((f, reject) => {
-		fulfill = f;
-		req.on('error', reject);
-	});
-	promise.req = req;
-	return promise;
-}
-
-function requestWithProxy(config) {
-	// let fulfill = () => {};
-	// const req = httpRequest({
-	// 	headers: {
-	// 		host: `${config.host}:443`,
-	// 		'proxy-authorization': `Basic ${auth}`,
-	// 	},
-	// 	host: config.proxy.host,
-	// 	method: 'CONNECT',
-	// 	path: `${config.host}:443`,
-	// 	port: config.proxy.port,
-	// 	protocol: 'http:',
-	// });
-	// return new Promise((fulfill, reject) => {
-	// 	req.on('connect', (res, socket) => {
-	// 		if (res.statusCode !== 200) return;
-	// 		// const agent = new httpsAgent({ socket });
-	// 		const reqInner = httpsGet({
-	// 			headers: config.headers,
-	// 			path: config.path,
-	// 			// host: config.host,
-	// 			// socket,
-	// 			host: 'localhost',
-	// 			port: 4433,
-	// 			rejectUnauthorized: false,
-	// 		}, res => {
-	// 			console.log('response:', res.statusCode, res.statusMessage, config.headers);
-	// 			const buffers = [];
-	// 			res.on('data', chunk => buffers.push(chunk));
-	// 			res.on('end', () => fulfill([res.headers, Buffer.concat(buffers)]));
-	// 		});
-	// 	});
-	// 	req.on('error', reject);
-	// 	req.end();
-	// });
-	return execInner('curl', [
-		'--http1.1',
-		'-L',
-		config.url,
-		'--proxy-user', `${credential.username}:${credential.password}`,
-		'-x', `http://${config.proxy.host}:${config.proxy.port}`,
-		'-H', `Cookie: ${config.headers.Cookie}`,
-		'-A', config.headers['User-Agent'],
-	], { maxBuffer: 1 << 24 }).then(({ stdout }) => stdout);
-}
-
-function fetchWork() {
-	return request({
-		end: true,
-		host: 'localhost',
-		path: '/get/black',
-		port: 18322,
-		protocol: 'https:',
-		rejectUnauthorized: false,
-	}).then(([, body]) => JSON.parse(body));
-}
-
-function submit(id, content) {
-	const promise = request({
-		headers: {
-			'content-type': 'application/json'
-		},
-		host: 'localhost',
-		method: 'POST',
-		path: '/send/black',
-		port: 18322,
-		protocol: 'https:',
-		rejectUnauthorized: false,
-	});
-	promise.req.write(JSON.stringify({ id, content }));
-	promise.req.end();
-	return promise;
-}
-
-async function worker(port, headers) {
-	const nsp = `\x1b[1;35m[${port}]\x1b[0m `;
-	for (; ; ) {
-		const works = await fetchWork();
-		if (!works.length) break;
-		for (const work of works) {
-			const url = `https://www.blackhatworld.com/seo/${work}`;
-			console.log(nsp + '\x1b[33mscraping\x1b[0m %o ...', url);
-
-			const content = await requestWithProxy({
-				headers,
-				url: `https://www.blackhatworld.com/seo/${work}`,
-				proxy: {
-					host: 'dc.smartproxy.com',
-					port,
-				},
-			});
-
-			if (!content.match(/<title>.*BlackHatWorld<\/title>/ms)) {
-				console.log(nsp + '\x1b[31mwrong\x1b[0m %o: %s', url, content);
-				await sleep(4000);
-				continue;
-			}
-
-			const [, body2] = await submit(work, content);
-			if (body2.toString() !== '""') {
-				console.log(nsp + '\x1b[31merror\x1b[0m %o: %s', url, body2.toString());
-			} else {
-				console.log(nsp + '\x1b[36mfinished\x1b[0m %o ...', url);
-			}
-			await sleep(2400 + Math.random() * 600);
-		}
-	}
-}
-
 const port = Number(process.argv[2]);
 if (Number.isSafeInteger(port)) {
 
@@ -173,7 +38,7 @@ if (Number.isSafeInteger(port)) {
 
 	const browser = await puppeteer.launch({
 		headless: false,
-		args: [`--proxy-server=http://dc.smartproxy.com:${port}`, '--disable-http2'],
+		args: [`--proxy-server=http://dc.smartproxy.com:${port}`],
 	});
 
 	const [page] = await browser.pages();
@@ -189,20 +54,4 @@ if (Number.isSafeInteger(port)) {
 
 	await new Promise(() => {});
 
-} else {
-	let Headers;
-	try {
-		Headers = JSON.parse(readFileSync(process.argv[2]));
-	} catch {}
-
-	if (Headers) {
-		const workers = [];
-		for (const port_ in Headers) {
-			const port = Number(port_);
-			if (!(Number.isSafeInteger(port) && Headers[port_].Cookie)) continue;
-			workers.push(worker(port, Headers[port_]));
-		}
-
-		await Promise.allSettled(workers);
-	}
 }

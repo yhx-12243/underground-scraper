@@ -29,7 +29,7 @@ postgres-protocol = "0.6.6"
 pretty_env_logger = "0.5.0"
 rand = { version = "0.8.5", features = ["log", "nightly"] }
 regex = "1.10.4"
-reqwest = { version = "0.12.4", features = ["json"] }
+reqwest = { version = "0.12.4", features = ["json", "native-tls-alpn"] }
 scraper = "0.19.0"
 serde = { version = "1.0.201", features = ["derive"] }
 serde_json = { version = "1.0.117", features = ["float_roundtrip"] }
@@ -98,6 +98,10 @@ path = "src/hackforums/main.rs"
 [[bin]]
 name = "hackforums-inner"
 path = "src/hackforums-inner/main.rs"
+
+[[bin]]
+name = "blackhatworld-worker"
+path = "src/blackhatworld-worker/main.rs"
 
 [[bin]]
 name = "ezkify"

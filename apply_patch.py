@@ -79,7 +79,7 @@ def patch_inner(patch, path, is_std=False):
         else:
             rmtree(path)
 
-    return patch, path, state
+    return patch, path, PatchStatus.PATCHED if state is None else state
 
 def patch_std(identifier, patch, stdlib):
     return (

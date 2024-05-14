@@ -22,7 +22,7 @@ The project has following requirements:
 
 * A Rust toolchain in a `nightly` version (not too old, 1.75+ is sufficient),
 * A [PostgreSQL](https://www.postgresql.org/) client (and server, if you don't have, v14+ is OK).
-* A Chrome/Edge Browser, as new as possible (120+ is OK).
+* A [ChromeDriver](https://chromedriver.chromium.org/), listening on port 9515 (default), as new as possible (120+ is OK).
 * (Optional) A Python 3 running environment (3.10+ is OK).
 
 The other dependencies will download when building by *Cargo*, please keep the network connection well.
@@ -52,7 +52,7 @@ export RUST_LOG=info
 
 We have some patch files for some Rust third-party libraries, they lie in [`./patches/*.patch`](./patches) directory, **you should apply them before compiling**.
 
-If you don't know how to apply them, you can just run the script `./apply_patch.py` to finish (although it may not be so robust but it usually works fine).
+If you don't know how to apply them, you can just run the script [`./apply_patch.py`](./apply_patch.py) **between `cargo fetch` and `cargo build`** to finish (although it may not be so robust but it usually works fine).
 
 In addition, all the patch we write are mild (compatible), namely, any program can pass without patch will always pass with patch and produce the same result. For example, we only make some private interface public, or add some interfaces.
 
@@ -202,11 +202,18 @@ The server also has the functions like "load balancing", different scrapers (wor
 
 ##### Usage
 
-We can use `./hackforums-inner` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward it to TCP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/hackforums-inner/main.rs#L55)[^1].
+We can use `./hackforums-inner` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward (like NGINX) it to a TCP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/hackforums-inner/main.rs#L55)[^1].
 
-[^1]: Anyway, as long as one can access the server in the same manner (TCP port / socket), then it will work. For example, the `work.mjs` uses the TCP port 18322 in localhost.
+[^1]: Anyway, as long as one can access the server in the same manner (TCP port / socket), then it will work. For example, the `blackhatworld-worker` uses the TCP port 18322 in localhost.
 
-Then we can use `GET /get/black` and `POST /send/black` (with JSON `{ id, content }`) to fetch and upload works, and we use [`blackhatworld-worker`] for sample content scraping.
+Then we can use `GET /get/black` and `POST /send/black` (with JSON `{ id, content }`) to fetch and upload works, and we use `blackhatworld-worker` for sample content scraping.
+
+First we need to configure the proxy in environment variables, they use in compile time similarly:
+```sh
+export PROXY_HOST=<host, like example.com> # optional, not supplying implies no proxy (dangerous!)
+export PROXY_USERNAME=<username> # optional
+export PROXY_PASSWORD=<password> # optional
+```
 
 To scrape fluently, we should prepare some headers, namely (`Cookie`, `User-Agent`) pairs, one can run
 ```sh
