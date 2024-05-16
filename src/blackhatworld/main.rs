@@ -3,7 +3,7 @@
 mod scrape;
 
 #[rustfmt::skip]
-const CONFIGS: [(&str, i64); 27] = [
+const CONFIGS: [(&str, i64); 65] = [
     ("bhw-marketplace-rules-and-how-to-post", 203),
     ("affiliate-programs-cpa-networks", 193),
     ("content-copywriting", 194),
@@ -32,6 +32,47 @@ const CONFIGS: [(&str, i64); 27] = [
     ("weibo", 216),
     ("x-formerly-twitter", 210),
     ("youtube", 77),
+
+    ("ai-artificial-intelligence-in-digital-marketing", 252),
+    ("black-hat-seo", 28),
+    ("black-hat-seo-tools", 9),
+    ("blogging", 3),
+    ("cloaking-and-content-generators", 2),
+    ("proxies", 101),
+    ("voice-search", 280),
+
+    ("copywriting-sales-persuasion", 168),
+    ("domain-names-parking", 53),
+    ("graphic-design", 169),
+    ("link-building", 108),
+    ("local-seo", 209),
+    ("video-production", 170),
+    ("web-hosting", 94),
+    ("white-hat-seo", 30),
+
+    ("associated-content-writing-articles", 107),
+    ("affiliate-programs", 15),
+    ("business-tax-advice", 96),
+    ("cpa", 50),
+    ("cryptocurrency", 218),
+    ("dropshipping-wholesale-hookups", 68),
+    ("ebay", 69),
+    ("hire-a-freelancer", 76),
+    ("joint-ventures", 65),
+    ("making-money", 12),
+    ("media-buying", 175),
+    ("membership-sites", 106),
+    ("mobile-marketing", 158),
+    ("my-journey-discussions", 167),
+    ("new-markets", 208),
+    ("offline-marketing", 132),
+    ("pay-per-click", 13),
+    ("pay-per-install", 205),
+    ("pay-per-view", 102),
+    ("site-flipping", 141),
+    ("torrents", 75),
+    ("freebies-giveaways", 174),
+    ("service-reviews-beta-testers-help-wanted", 165),
 ];
 
 #[tokio::main]

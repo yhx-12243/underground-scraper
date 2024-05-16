@@ -35,13 +35,13 @@ pub async fn get() -> Json<Vec<i64>> {
 #[actix_web::get("/get/black")]
 pub async fn get_black() -> Json<Vec<i64>> {
     let mut guard = BIDS.lock();
-    let ret = if guard.len() > 50 {
-        guard.rotate_left(50);
-        guard[guard.len() - 50..].to_vec()
-    } else {
-        guard.clone()
-    };
-    Json(ret)
+    let L = 50.min((guard.len() + 1) / 2);
+    // SAFETY: (x + 1) / 2 <= x
+    unsafe {
+        core::hint::assert_unchecked(L <= guard.len());
+    }
+    guard.rotate_left(L);
+    Json(guard[guard.len() - L..].to_vec())
 }
 
 #[derive(Deserialize)]

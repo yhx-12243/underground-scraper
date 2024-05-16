@@ -1,4 +1,4 @@
-#![feature(iter_next_chunk, try_blocks)]
+#![feature(ascii_char, iter_next_chunk, try_blocks)]
 
 mod scrape;
 

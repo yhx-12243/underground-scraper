@@ -52,11 +52,9 @@ impl Worker {
     }
 
     fn simple_check(text: &str) -> bool {
-        let Some(i) = text.find("BlackHatWorld</title>") else {
-            return false;
-        };
-        // SAFETY: 0 <= i < text.len().
-        unsafe { text.get_unchecked(..i).contains("<title>") }
+        text.find("BlackHatWorld</title>").is_some_and(|i|
+            // SAFETY: 0 <= i < text.len().
+            unsafe { text.get_unchecked(..i).contains("<title>") })
     }
 
     pub async fn into_future(mut self) -> reqwest::Result<()> {
@@ -120,8 +118,8 @@ impl Worker {
                                     log::info!(target: &target, "\x1b[31merror\x1b[0m {url}: {reason}");
                                     break;
                                 }
-                                Err(e) => {
-                                    log::error!(target: &target, "submit error: {e:?}");
+                                Err(err) => {
+                                    log::error!(target: &target, "\x1b[32msubmit error\x1b[0m {url}: \x1b[35m{text:?}\x1b[0m {err:?}");
                                     tokio::time::sleep(Duration::from_millis(1250)).await;
                                 }
                             }

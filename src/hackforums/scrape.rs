@@ -86,7 +86,7 @@ pub async fn work(page: i32, ctx: &Context) {
                     SystemTime::UNIX_EPOCH
                         .checked_add(Duration::from_secs(b.attr("data-timestamp")?.parse().ok()?))?
                 } else {
-                    simple_parse(a.value().as_text()?)?
+                    simple_parse(a.value().as_text()?.as_ascii()?)?
                 }
             };
 

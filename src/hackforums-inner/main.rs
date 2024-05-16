@@ -1,4 +1,4 @@
-#![feature(try_blocks)]
+#![feature(hint_assert_unchecked, try_blocks)]
 
 mod service;
 
@@ -34,7 +34,9 @@ async fn main() -> std::io::Result<()> {
 
     service::init(vec![], get_black_ids().await.collect());
 
-    let json_config = web::JsonConfig::default().content_type_required(false);
+    let json_config = web::JsonConfig::default()
+        .content_type_required(false)
+        .limit(usize::MAX);
 
     let server = HttpServer::new(move || {
         let cors = actix_cors::Cors::default()
