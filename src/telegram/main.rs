@@ -1,8 +1,11 @@
 #![feature(
     const_int_from_str,
+    stmt_expr_attributes,
     future_join,
+    let_chains,
+    ptr_sub_ptr,
     try_blocks,
-    yeet_expr,
+    yeet_expr
 )]
 
 use hashbrown::{HashMap, HashSet};
@@ -108,13 +111,21 @@ async fn main() -> anyhow::Result<()> {
             for raw_channel in raw_channels {
                 if let Ok(id) = raw_channel.parse() {
                     ids.insert(id);
-                } else {
-                    match telegram::access_channel(&client, &raw_channel).await {
-                        Ok(channel) => {
-                            channels.insert(channel.id, channel);
-                        }
-                        Err(e) => tracing::error!(?e),
+                    continue;
+                }
+                match telegram::access_channel(&client, &raw_channel).await {
+                    Ok(channel) => {
+                        channels.insert(channel.id, channel);
+                        continue;
                     }
+                    Err(e) => tracing::error!(?e),
+                }
+                match telegram::access_invite(&client, &raw_channel).await {
+                    Ok(channel) => {
+                        channels.insert(channel.id, channel);
+                        continue;
+                    }
+                    Err(e) => tracing::error!(?e),
                 }
             }
             for channel in telegram::fetch_channels(

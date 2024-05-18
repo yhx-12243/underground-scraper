@@ -1,0 +1,32 @@
+diff --git a/src/map.rs b/src/map.rs
+index 88a8265..e0bfccb 100644
+--- a/src/map.rs
++++ b/src/map.rs
+@@ -5265,6 +5265,11 @@ impl<'a, K, V: Default, S, A: Allocator> Entry<'a, K, V, S, A> {
+ }
+ 
+ impl<'a, K, V, S, A: Allocator> OccupiedEntry<'a, K, V, S, A> {
++    #[cfg_attr(feature = "inline-more", inline)]
++    pub fn into_key(self) -> Option<K> {
++        self.key
++    }
++
+     /// Gets a reference to the key in the entry.
+     ///
+     /// # Examples
+diff --git a/src/set.rs b/src/set.rs
+index 2125a7a..96b00ca 100644
+--- a/src/set.rs
++++ b/src/set.rs
+@@ -2304,6 +2304,11 @@ impl<'a, T, S, A: Allocator> Entry<'a, T, S, A> {
+ }
+ 
+ impl<T, S, A: Allocator> OccupiedEntry<'_, T, S, A> {
++    #[cfg_attr(feature = "inline-more", inline)]
++    pub fn into_key(self) -> Option<T> {
++        self.inner.into_key()
++    }
++
+     /// Gets a reference to the value in the entry.
+     ///
+     /// # Examples

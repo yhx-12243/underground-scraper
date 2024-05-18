@@ -80,6 +80,46 @@ pub async fn access_channel(client: &Client, name: &str) -> anyhow::Result<Chann
     })
 }
 
+pub async fn access_invite(client: &Client, name: &str) -> anyhow::Result<Channel> {
+    use tl::{
+        enums::{Chat, ChatInvite},
+        types::{ChatInviteAlready, ChatInvitePeek},
+    };
+
+    tracing::info!(target: "telegram-access-invite", "======== \x1b[32mACCESSING INVITE \x1b[36m{name}\x1b[0m ========");
+
+    let request = tl::functions::messages::CheckChatInvite {
+        hash: name.to_owned(),
+    };
+
+    let (ChatInvite::Already(ChatInviteAlready { chat })
+    | ChatInvite::Peek(ChatInvitePeek { chat, .. })) = client.invoke(&request).await?
+    else {
+        anyhow::bail!("Cannot get entity from a channel (or group) that you are not part of. Join the group and retry")
+    };
+
+    match chat {
+        Chat::Channel(tl::types::Channel {
+            id,
+            access_hash,
+            title,
+            username,
+            ..
+        }) => Ok(Channel {
+            id,
+            name: username.unwrap_or(title),
+            access_hash: access_hash.unwrap_or(0),
+        }),
+        Chat::Chat(tl::types::Chat { id, title, .. }) => Ok(Channel {
+            id,
+            name: title,
+            access_hash: 0,
+        }),
+        _ => Err(anyhow::anyhow!("type mismatch")),
+    }
+    // +T118XSKBqDw2ZGFk
+}
+
 pub async fn fetch_channels<C>(
     client: &Client,
     channels: C,
@@ -127,13 +167,10 @@ pub async fn get_channel_info(
     client: &Client,
     channel: &Channel,
 ) -> Result<tl::types::messages::ChatFull, InvocationError> {
-    use tl::{
-        enums::{messages::ChatFull::Full, InputChannel::Channel},
-        types::InputChannel,
-    };
+    use tl::enums::{messages::ChatFull::Full, InputChannel::Channel};
 
     let request = tl::functions::channels::GetFullChannel {
-        channel: Channel(InputChannel {
+        channel: Channel(tl::types::InputChannel {
             channel_id: channel.id,
             access_hash: channel.access_hash,
         }),
@@ -320,6 +357,7 @@ pub async fn fetch_content(client: &Client, channel: &Channel) {
             let item = if let Some(raw) = iter.next_raw() {
                 raw
             } else {
+                #[rustfmt::skip]
                 if !buffer.is_empty() {
                     let sleep = tokio::time::sleep(const { core::time::Duration::from_millis(180) });
                     let db_fut = insert_to_db(core::mem::take(&mut buffer), channel.id, &mut interval);

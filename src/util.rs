@@ -5,7 +5,7 @@ const TEMPLATE_DATE: [Char; 29] = *b"Sun, 0D MMM YYYY_hh_mm:00 GMT".as_ascii().u
 
 /// source format: 'Jan 02, 2006 03:04 PM'
 pub fn simple_parse(mut time: &[Char]) -> Option<SystemTime> {
-    if time.len() < 19 {
+    if time.len() < 20 {
         return None; // early return to eliminate bound checks
     }
 

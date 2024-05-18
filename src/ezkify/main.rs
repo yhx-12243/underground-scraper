@@ -1,4 +1,4 @@
-#![feature(iter_next_chunk)]
+#![feature(iter_next_chunk, stmt_expr_attributes)]
 
 use uscr::db::get_connection;
 
@@ -129,6 +129,7 @@ async fn main() -> anyhow::Result<()> {
             let mut description = String::new();
             if let Some(dnone) = cells[5].select(&sel_dnone).next() {
                 for node in dnone.children() {
+                    #[rustfmt::skip]
                     match node.value() {
                         scraper::Node::Text(text) => description.push_str(text),
                         scraper::Node::Element(elem) if elem.name() == "br" => description.push('\n'),

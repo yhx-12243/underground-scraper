@@ -17,7 +17,7 @@ compact_str = { version = "0.7.1", features = ["serde"] }
 const_format = "0.2.32"
 fantoccini = "0.19.3"
 futures-util = "0.3.30"
-grammers-client = { git = "https://github.com/Lonami/grammers" }
+grammers-client = { git = "https://github.com/Lonami/grammers", features = ["parse_invite_link"] }
 grammers-session = { git = "https://github.com/Lonami/grammers" }
 grammers-tl-types = { git = "https://github.com/Lonami/grammers" }
 hashbrown = { version = "0.14.5", features = ["serde"] }
