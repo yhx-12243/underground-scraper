@@ -1,4 +1,4 @@
-use core::{mem::take, time::Duration};
+use core::time::Duration;
 
 use compact_str::{format_compact, CompactString};
 use rand::{thread_rng, Rng};
@@ -64,18 +64,21 @@ impl Worker {
         if let Some(proxy) = proxy {
             client = client.proxy(proxy);
         }
-        let client = client
-            .default_headers(
-                if let Ok(cookie) = HeaderValue::try_from(take(&mut self.headers.cookie)) {
-                    Some((COOKIE, cookie))
-                } else {
-                    None
-                }
-                .into_iter()
-                .collect(),
-            )
-            .user_agent(take(&mut self.headers.user_agent))
-            .build()?;
+        let client =
+            client
+                .default_headers(
+                    if let Ok(cookie) =
+                        HeaderValue::try_from(core::mem::take(&mut self.headers.cookie))
+                    {
+                        Some((COOKIE, cookie))
+                    } else {
+                        None
+                    }
+                    .into_iter()
+                    .collect(),
+                )
+                .user_agent(core::mem::take(&mut self.headers.user_agent))
+                .build()?;
         let target = format_compact!("worker-{}", self.client_port);
         let mut rng = thread_rng();
 

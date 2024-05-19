@@ -1,12 +1,18 @@
-use std::future::join;
-use std::io::{stdin, stdout, Write};
+use std::{
+    future::join,
+    io::{stdin, stdout, Write},
+    path::Path,
+};
 
+use compact_str::CompactString;
 use grammers_client::{client::bots::InvocationError, Client, Config, InitParams};
+use grammers_mtproto::mtp::RpcError;
 use grammers_session::{PackedChat, PackedType, Session};
 use grammers_tl_types as tl;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::types::Json;
 use uscr::db::{get_connection, BB8Error, DBResult, PooledConnection, ToSqlIter};
+use uscr::util::xmax_to_success;
 
 #[allow(clippy::from_str_radix_10)] // false positive (const fn)
 const API_ID: i32 = if let Ok(id) = i32::from_str_radix(env!("TG_ID"), 10) {
@@ -16,14 +22,15 @@ const API_ID: i32 = if let Ok(id) = i32::from_str_radix(env!("TG_ID"), 10) {
 };
 const API_HASH: &str = env!("TG_HASH");
 
-const SESSION_PATH: &str = "telegram.session";
-
-pub async fn get_client() -> anyhow::Result<Client> {
+pub async fn get_client(session_path: &Path) -> anyhow::Result<Client> {
     let config = Config {
-        session: Session::load_file_or_create(SESSION_PATH)?,
+        session: Session::load_file_or_create(session_path)?,
         api_id: API_ID,
         api_hash: API_HASH.to_owned(),
-        params: InitParams::default(),
+        params: InitParams {
+            flood_sleep_threshold: 192,
+            ..InitParams::default()
+        },
     };
 
     Client::connect(config).await.map_err(Into::into)
@@ -52,21 +59,34 @@ pub async fn login(client: &Client) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn save(client: &Client) -> std::io::Result<()> {
-    client.session().save_to_file(SESSION_PATH)
+pub fn save(client: &Client, session_path: &Path) -> std::io::Result<()> {
+    client.session().save_to_file(session_path)
 }
 
 #[derive(Debug)]
 pub struct Channel {
     pub id: i64,
-    pub name: String,
+    pub name: CompactString,
     pub access_hash: i64,
 }
 
 pub async fn access_channel(client: &Client, name: &str) -> anyhow::Result<Channel> {
+    use grammers_client::types::Chat::User;
+
     tracing::info!(target: "telegram-access-channel", "======== \x1b[32mACCESSING CHANNEL \x1b[36m{name}\x1b[0m ========");
-    let Some(chat) = client.resolve_username(name).await? else {
-        anyhow::bail!("channel {name} not found");
+    let chat = match client.resolve_username(name).await {
+        Ok(Some(User(_))) => anyhow::bail!("{name} is a user"),
+        Ok(Some(c)) => c,
+        Ok(None) => anyhow::bail!("channel {name} not found"),
+        Err(InvocationError::Rpc(RpcError {
+            code: 420,
+            name,
+            value,
+            caused_by,
+        })) => anyhow::bail!(
+            "{name} caused by \x1b[33m{caused_by:?}\x1b[0m, wait \x1b[33m{value:?}\x1b[0m"
+        ),
+        Err(e) => return Err(e.into()),
     };
 
     let PackedChat {
@@ -75,7 +95,7 @@ pub async fn access_channel(client: &Client, name: &str) -> anyhow::Result<Chann
 
     Ok(Channel {
         id,
-        name: chat.username().unwrap_or_else(|| chat.name()).to_owned(),
+        name: chat.username().unwrap_or_else(|| chat.name()).into(),
         access_hash: access_hash.unwrap_or(0),
     })
 }
@@ -92,8 +112,21 @@ pub async fn access_invite(client: &Client, name: &str) -> anyhow::Result<Channe
         hash: name.to_owned(),
     };
 
+    let r = match client.invoke(&request).await {
+        Ok(r) => r,
+        Err(InvocationError::Rpc(RpcError {
+            code: 420,
+            name,
+            value,
+            caused_by,
+        })) => anyhow::bail!(
+            "{name} caused by \x1b[33m{caused_by:?}\x1b[0m, wait \x1b[33m{value:?}\x1b[0m"
+        ),
+        Err(e) => return Err(e.into()),
+    };
+
     let (ChatInvite::Already(ChatInviteAlready { chat })
-    | ChatInvite::Peek(ChatInvitePeek { chat, .. })) = client.invoke(&request).await?
+    | ChatInvite::Peek(ChatInvitePeek { chat, .. })) = r
     else {
         anyhow::bail!("Cannot get entity from a channel (or group) that you are not part of. Join the group and retry")
     };
@@ -107,17 +140,16 @@ pub async fn access_invite(client: &Client, name: &str) -> anyhow::Result<Channe
             ..
         }) => Ok(Channel {
             id,
-            name: username.unwrap_or(title),
+            name: username.unwrap_or(title).into(),
             access_hash: access_hash.unwrap_or(0),
         }),
         Chat::Chat(tl::types::Chat { id, title, .. }) => Ok(Channel {
             id,
-            name: title,
+            name: title.into(),
             access_hash: 0,
         }),
         _ => Err(anyhow::anyhow!("type mismatch")),
     }
-    // +T118XSKBqDw2ZGFk
 }
 
 pub async fn fetch_channels<C>(
@@ -155,7 +187,7 @@ where
 
             Some(Channel {
                 id: channel.id,
-                name: channel.username.unwrap_or(channel.title),
+                name: channel.username.unwrap_or(channel.title).into(),
                 access_hash: channel.access_hash.unwrap_or(0),
             })
         })
@@ -251,12 +283,12 @@ impl From<tl::types::Message> for Message {
 }
 
 async fn insert_to_db(
-    messages: Vec<(i32, Message)>,
+    messages: &[(i32, Message)],
     channel_id: i64,
     interval: &mut Option<(i32, i32)>,
 ) -> Option<i32> {
     async fn insert_to_db_inner(
-        messages: Vec<(i32, Message)>,
+        messages: &[(i32, Message)],
         channel_id: i64,
     ) -> Result<(usize, usize, i32, i32, PooledConnection), BB8Error> {
         const SQL: &str = "with tmp_insert(m, d) as (select * from unnest($1::integer[], $3::jsonb[])) insert into telegram.message (id, message_id, channel_id, data) select ($2::bigint << 32) | m, m, $2, d from tmp_insert on conflict (id) do update set message_id = excluded.message_id, channel_id = excluded.channel_id, data = excluded.data returning xmax";
@@ -278,12 +310,7 @@ async fn insert_to_db(
             )
             .await?;
 
-        let n = rows
-            .iter()
-            .filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0))
-            .count();
-
-        Ok((n, len, min, max, conn))
+        Ok((xmax_to_success(rows.iter()), len, min, max, conn))
     }
 
     if messages.is_empty() {
@@ -302,7 +329,7 @@ async fn insert_to_db(
                     None => interval.insert((min, max)),
                 };
                 let e: DBResult<()> = try {
-                    const SQL: &str = "update telegram.channel set min_message_id = $1, max_message_id = $2,     last_fetch = now() at time zone 'UTC' where id = $3";
+                    const SQL: &str = "update telegram.channel set min_message_id = $1, max_message_id = $2, last_fetch = now() at time zone 'UTC' where id = $3";
                     let stmt = conn.prepare_static(SQL.into()).await?;
                     conn.execute(&stmt, &[&inner.0, &inner.1, &channel_id])
                         .await?;
@@ -320,7 +347,7 @@ async fn insert_to_db(
     }
 }
 
-pub async fn fetch_content(client: &Client, channel: &Channel) {
+pub async fn fetch_content(client: &Client, channel: &Channel, limit: u32) {
     tracing::info!(target: "telegram-insert-message", "======== \x1b[32mFETCHING CONTENT \x1b[36m{}\x1b[0m ========", channel.id);
 
     let packed = PackedChat {
@@ -348,7 +375,7 @@ pub async fn fetch_content(client: &Client, channel: &Channel) {
         }
     };
     let mut interval = interval_origin;
-    let stop_point = interval.map_or(0, |x| x.1);
+    let mut stop_point = interval.map_or(0, |x| x.1);
 
     let mut iter = client.iter_messages(packed);
     let mut buffer = Vec::with_capacity(100);
@@ -360,19 +387,29 @@ pub async fn fetch_content(client: &Client, channel: &Channel) {
                 #[rustfmt::skip]
                 if !buffer.is_empty() {
                     let sleep = tokio::time::sleep(const { core::time::Duration::from_millis(180) });
-                    let db_fut = insert_to_db(core::mem::take(&mut buffer), channel.id, &mut interval);
-                    if join!(sleep, db_fut)
-                        .await
-                        .1
-                        .is_some_and(|x| x <= stop_point)
-                    {
+                    let db_fut = insert_to_db(&buffer, channel.id, &mut interval);
+                    let batch_max: Option<i32> = join!(sleep, db_fut).await.1;
+                    if let Some((_, r)) = interval && (r as u32) > limit {
+                        stop_point = stop_point.max(r.wrapping_sub_unsigned(limit));
+                    }
+                    if batch_max.is_some_and(|x| x <= stop_point) {
                         break 'outer;
                     }
+                    buffer.clear();
                 }
                 iter.next().await
             };
             match item {
                 Ok(item) => break item,
+                Err(InvocationError::Rpc(RpcError {
+                    code: 400,
+                    name: "CHANNEL_PRIVATE",
+                    ..
+                })) => {
+                    tracing::error!(target: "telegram-fetch-message", "private channel");
+                    insert_to_db(&buffer, channel.id, &mut interval).await;
+                    break 'outer;
+                }
                 Err(e) => {
                     tracing::error!(target: "telegram-fetch-message", ?e);
                     tokio::time::sleep(const { core::time::Duration::from_secs(1) }).await;
@@ -380,7 +417,7 @@ pub async fn fetch_content(client: &Client, channel: &Channel) {
             };
         };
         let Some(message) = item else {
-            insert_to_db(buffer, channel.id, &mut interval).await;
+            insert_to_db(&buffer, channel.id, &mut interval).await;
             break;
         };
         let message = Message::from(message.into_inner());

@@ -1,5 +1,4 @@
-use std::ascii::Char;
-use std::time::SystemTime;
+use std::{ascii::Char, time::SystemTime};
 
 const TEMPLATE_DATE: [Char; 29] = *b"Sun, 0D MMM YYYY_hh_mm:00 GMT".as_ascii().unwrap();
 
@@ -33,4 +32,12 @@ pub fn simple_parse(mut time: &[Char]) -> Option<SystemTime> {
     tracing::info!(target: "time-converter", "{time:?} -> {buf:?} -> {date:?}");
 
     date.ok()
+}
+
+pub fn xmax_to_success<'a, I>(rows: I) -> usize
+where
+    I: Iterator<Item = &'a tokio_postgres::Row>,
+{
+    rows.filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0))
+        .count()
 }

@@ -6,7 +6,10 @@ use std::{
 use fantoccini::{Client as Driver, Locator};
 use regex::Regex;
 use scraper::{Html, Selector};
-use uscr::db::{get_connection, BB8Error, ToSqlIter};
+use uscr::{
+    db::{get_connection, BB8Error, ToSqlIter},
+    util::xmax_to_success,
+};
 
 pub struct Context {
     pub driver: Driver,
@@ -123,7 +126,7 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
 
     if !res.is_empty() {
         let res: Result<(), BB8Error> = try {
-            let SQL = format!("with tmp_insert(i, a, t, c, r, v, l) as (select * from unnest($1::bigint[], $2::text[], $3::text[], $4::timestamp[], $5::bigint[], $6::bigint[], $7::timestamp[])) insert into blackhatworld.posts (id, time, author, title, create_time, replies, views, last_reply, section) select i, now() at time zone 'UTC', a, t, c, r, v, l, {} from tmp_insert on conflict (id) do update set time = excluded.time, author = excluded.author, title = excluded.title, replies = excluded.replies, views = excluded.views, last_reply = excluded.last_reply returning xmax", ctx.cfg.1);
+            const SQL: &str = "with tmp_insert(i, a, t, c, r, v, l) as (select * from unnest($2::bigint[], $3::text[], $4::text[], $5::timestamp[], $6::bigint[], $7::bigint[], $8::timestamp[])) insert into blackhatworld.posts (id, time, author, title, create_time, replies, views, last_reply, section) select i, now() at time zone 'UTC', a, t, c, r, v, l, $1 from tmp_insert on conflict (id) do update set time = excluded.time, author = excluded.author, title = excluded.title, replies = excluded.replies, views = excluded.views, last_reply = excluded.last_reply returning xmax";
 
             let mut conn = get_connection().await?;
             let stmt = conn.prepare_static(SQL.into()).await?;
@@ -131,6 +134,7 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
                 .query(
                     &stmt,
                     &[
+                        &ctx.cfg.1,
                         &ToSqlIter(res.iter().map(|x| x.id)),
                         &ToSqlIter(res.iter().map(|x| &*x.author)),
                         &ToSqlIter(res.iter().map(|x| &*x.title)),
@@ -142,10 +146,7 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
                 )
                 .await?;
 
-            let n_rows = rows
-                .iter()
-                .filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0))
-                .count();
+            let n_rows = xmax_to_success(rows.iter());
 
             tracing::info!(target: "db", "\x1b[36m[Page #{page}] update {n_rows}/{} items\x1b[0m", res.len());
 

@@ -277,6 +277,19 @@ CREATE TABLE telegram.message (
     PRIMARY KEY (id)
 );
 
+CREATE TABLE telegram.link (
+    c1 bigint NOT NULL,
+    message_id integer NOT NULL,
+    c2 bigint NOT NULL,
+    PRIMARY KEY (c1, message_id, c2)
+);
+
+CREATE TABLE telegram.invite (
+    hash text NOT NULL,
+    channel_id bigint NOT NULL,
+    PRIMARY LEY (hash)
+);
+
 CREATE INDEX ON telegram.channel (lower(name));
 
 CREATE INDEX ON telegram.message (channel_id, message_id);
