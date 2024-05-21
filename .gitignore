@@ -1,2 +1,10 @@
+/patches/alloc.patch
+/patches/core.patch
+/patches/std.patch
 /target
 telegram.session
+*.aux
+*.bbl
+*.blg
+*.log
+*.out

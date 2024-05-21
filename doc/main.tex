@@ -1,0 +1,79 @@
+\documentclass{article}
+\usepackage{extramarks, fancyhdr}
+\usepackage{main}
+
+\pagestyle{fancy}
+\lhead{\nouppercase{\lastleftmark}}
+\rhead{\nouppercase{\lastrightmark}}
+
+\makeatletter
+\renewcommand\@maketitle{\begin{center}{\LARGE\@title\par}\end{center}\par\vskip1.5em}
+\makeatother
+
+\title{Underground Scraper}
+\begin{document}
+	\maketitle
+	\addtocounter{section}2
+	\section{Collection Methodology}
+
+	Now we turn to describing how we collected the data including underground market places as well as social networks like Telegram.
+	First we will briefly introduce the main idea and methods, and our achievement measure, then we will write down some troubles and challenges we met and how we address or bypass it.
+
+	\subsection{Results Overview}
+
+	We mainly dive into 3 different marketplaces (AccsMarket, EZKIFY Services, BlackHatWorld) and 1 social media (Telegram), yielding millions of rows (tuples), with a $\sim\!\unit {100} {\giga\byte}$ data set size. The scraper runs one to two times every day to keep the track of various data indicators.
+
+	The whole scraper project is written in pure Rust benefit from its excellent error handling and recovering, to keep it safely run on the background. We have successively used many techniques including Tors\cite{tor}, IP pools, Chrome drivers, Headless chrome (puppeteer) during the whole process.
+
+	As of Mid-May, the number of tuples (rows) in each marketplace is shown in \autoref{table:num-marketplace}.
+
+	\begin{table}[htb]
+		\centering
+		\begin{tabular}{|c|c|c|}
+			\hline
+				Marketplace & Tuples \\
+			\hline\hline
+				AccsMarket & 63786 \\
+			\hline
+				EZKIFY & 164\,672 \\
+			\hline
+				BlackHatWorld & 581\,103 \\
+			\hline
+				Telegram & 268\,678\,097 \\
+			\hline
+		\end{tabular}
+		\caption{\# of tuples in each marketplace}
+		\label{table:num-marketplace}
+	\end{table}
+
+	\subsection{Scraping Mechanism}
+
+	Since viewing posts and contents in many forums of BlackHatWorld does not require authentication, we can do our scraping sneakingly. To keep our efficiency and not be noticed by Website administrators, we use proxy IP pools with 100 different IP with each one walking at a random $\unit {2.5} \second \sim \unit 3 \second$/page rate, and we finally get a quite good rate of $30 \sim 40$ pages per second.
+
+	Also, BlackHatWorld built a defense of Cloudflare, to resolve it we use Chrome driver and puppeteers to temporary open a Chrome, and manually solve the annoying puzzle to get Cookie, then the Cookie will store to local automatically, then this authentication cookie will keep valid for at least $2 \sim 3$ days, which offers a lot.
+
+	To coordinate all ``workers'' that using different IPs, we use a local server technique ------ We built a local server to handle the functionality of result uploading, it plays a role as gateway, which means that we can write different kinds of scrapers (in different ways), and all of the data will send to our local server in a simple (and unified) format. These scrapers can written in various languages and we avoid sticking lower into databases. The server also has the functions like ``load balancing'', different scrapers (workers) first request to it to get the disjoint work, and do them themselves, finally upload to server, thus ensures the efficient use of resources.
+
+	We use PostgreSQL as data storage and management system for its various features including JSON storage and a beautifully efficient speed.
+
+	\subsubsection{Data freshness check and update}
+
+	For AccsMarket and EZKIFY, the website itself does not keep the history of data, we can scrape it regularly with checking and comparing (post-processing), because one round of whole-scraping does not cost much. For BlackHatWorld, we can force the post order by the ``post date'' (a.k.a. ID order, which are some) by using \verb!?order=post_date&direction=desc!, to prevent the out-of-order caused by irregular replies.
+
+	\subsubsection{Snowball Scraping}
+
+	For Telegram, we use the technique of snowball scraping. Suppose we already have a set of channels in our database,
+
+
+	\subsection{Challenges}
+
+	\subsubsection{Verification/Authentication}
+
+	\subsubsection{TLS Fingerprints}
+
+	\subsubsection{Error Handling}
+
+	\normalem
+	\bibliographystyle{plain}
+	\bibliography{main}
+\end{document}

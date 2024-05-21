@@ -1,6 +1,6 @@
 use std::{
     future::join,
-    io::{stdin, stdout, Write},
+    io::{self, stdin, stdout, Write},
     path::Path,
 };
 
@@ -22,7 +22,7 @@ const API_ID: i32 = if let Ok(id) = i32::from_str_radix(env!("TG_ID"), 10) {
 };
 const API_HASH: &str = env!("TG_HASH");
 
-pub async fn get_client(session_path: &Path) -> anyhow::Result<Client> {
+pub async fn get_client(session_path: &Path) -> io::Result<Client> {
     let config = Config {
         session: Session::load_file_or_create(session_path)?,
         api_id: API_ID,
@@ -33,19 +33,22 @@ pub async fn get_client(session_path: &Path) -> anyhow::Result<Client> {
         },
     };
 
-    Client::connect(config).await.map_err(Into::into)
+    Client::connect(config).await.map_err(io::Error::other)
 }
 
-pub async fn login(client: &Client) -> anyhow::Result<()> {
+pub async fn login(client: &Client) -> io::Result<()> {
     let mut phone = String::with_capacity(32);
-    while !client.is_authorized().await? {
+    while !client.is_authorized().await.map_err(io::Error::other)? {
         if phone.is_empty() {
             let mut stdout = stdout();
             stdout.write_all(b"Please enter your phone: ")?;
             stdout.flush()?;
             stdin().read_line(&mut phone)?;
         }
-        let token = client.request_login_code(phone.trim()).await?;
+        let token = client
+            .request_login_code(phone.trim())
+            .await
+            .map_err(io::Error::other)?;
 
         let mut code = String::with_capacity(32);
         {
@@ -54,7 +57,10 @@ pub async fn login(client: &Client) -> anyhow::Result<()> {
             stdout.flush()?;
             stdin().read_line(&mut code)?;
         }
-        client.sign_in(&token, &code).await?;
+        client
+            .sign_in(&token, &code)
+            .await
+            .map_err(io::Error::other)?;
     }
     Ok(())
 }
@@ -402,11 +408,9 @@ pub async fn fetch_content(client: &Client, channel: &Channel, limit: u32) {
             match item {
                 Ok(item) => break item,
                 Err(InvocationError::Rpc(RpcError {
-                    code: 400,
-                    name: "CHANNEL_PRIVATE",
-                    ..
+                    code: 400, name, ..
                 })) => {
-                    tracing::error!(target: "telegram-fetch-message", "private channel");
+                    tracing::error!(target: "telegram-fetch-message", "channel error: {name}");
                     insert_to_db(&buffer, channel.id, &mut interval).await;
                     break 'outer;
                 }

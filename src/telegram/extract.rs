@@ -11,7 +11,7 @@ use hashbrown::{
     hash_set::{Entry, HashSet},
     HashMap,
 };
-use tokio_postgres::Client;
+use tokio_postgres::{types::ToSql, Client};
 use uscr::{
     db::{get_connection, BB8Error, DBResult, ToSqlIter},
     util::xmax_to_success,
@@ -143,25 +143,18 @@ impl Inspector {
         Ok(())
     }
 
-    pub async fn extract_content(
-        &mut self,
-        id: i64,
-        limit: Option<u32>,
-    ) -> Result<(), uscr::db::BB8Error> {
-        const SQL: &str = "select channel_id, message_id, data->>'message' from telegram.message where channel_id = $1 and data->>'message' like '%t%'";
-        const SQL_WITH_LIMIT: &str = "select channel_id, message_id, data->>'message' from telegram.message where channel_id = $1 and data->>'message' like '%t%' order by message_id desc limit $2";
+    pub async fn extract_content(&mut self) -> Result<(), uscr::db::BB8Error> {
+        const SQL: &str = "select channel_id, message_id, data->>'message' from telegram.message where data->>'message' like '%t%'";
 
         let mut conn = get_connection().await?;
-        let stream = if let Some(limit) = limit {
-            let stmt = conn.prepare_static(SQL_WITH_LIMIT.into()).await?;
-            conn.query_raw(&stmt, &[&id, &(limit as i64)]).await
-        } else {
-            let stmt = conn.prepare_static(SQL.into()).await?;
-            conn.query_raw(&stmt, &[&id]).await
-        }?;
+        let mut conn2 = get_connection().await?;
+        let stmt = conn.prepare_static(SQL.into()).await?;
+        let stream = conn
+            .query_raw(&stmt, core::iter::empty::<&dyn ToSql>())
+            .await?;
         let mut stream = pin!(stream);
 
-        let last_len = self.es.len();
+        let mut cnt = 0;
         while let Some(row) = stream.try_next().await? {
             if let Ok(channel_id) = row.try_get(0)
                 && let Ok(message_id) = row.try_get(1)
@@ -169,16 +162,14 @@ impl Inspector {
             {
                 self.inspect(channel_id, message_id, content);
             }
+            cnt += 1;
+            if cnt % 65536 == 0 {
+                self.commit(&self.es, &mut conn2).await?;
+                self.es.clear();
+            }
         }
 
-        let n = self.es.len() - last_len;
-        if n != 0 {
-            tracing::info!(target: "telegram-extractor", "[channel \x1b[36m{id}\x1b[0m] \x1b[33m{n}\x1b[0m data collected");
-        }
-
-        self.commit(&self.es[last_len..], &mut conn)
-            .await
-            .map_err(Into::into)
+        self.commit(&self.es, &mut conn2).await.map_err(Into::into)
     }
 }
 

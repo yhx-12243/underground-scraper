@@ -62,7 +62,7 @@ where
 async fn get_all_channels_from_db() -> Result<Vec<telegram::Channel>, uscr::db::BB8Error> {
     use uscr::db::get_connection;
 
-    const SQL: &str = "select id, name, access_hash from telegram.channel order by last_fetch";
+    const SQL: &str = "select id, name, access_hash from telegram.channel where last_fetch < '3000-1-1' order by last_fetch";
 
     let mut conn = get_connection().await?;
     let stmt = conn.prepare_static(SQL.into()).await?;
@@ -110,8 +110,6 @@ enum Commands {
         limit: u32,
     },
     Extract {
-        #[arg(short, long)]
-        limit: Option<u32>,
         #[arg(short, long, default_value = "ids.txt")]
         save: std::path::PathBuf,
     },
@@ -183,11 +181,7 @@ async fn main() -> anyhow::Result<()> {
                 telegram::fetch_content(&client, &channel, limit).await;
             }
         }
-        Commands::Extract { limit, save } => {
-            let mut channels = get_all_channels_from_db().await?;
-            let mut thread_rng = rand::thread_rng();
-            rand::seq::SliceRandom::shuffle(&mut *channels, &mut thread_rng);
-
+        Commands::Extract { save } => {
             let map = extract::generate_user_id_map().await?;
 
             let mut inspector = extract::Inspector::new(
@@ -197,9 +191,7 @@ async fn main() -> anyhow::Result<()> {
                     .append(true)
                     .open(save)?,
             );
-            for channel in channels {
-                inspector.extract_content(channel.id, limit).await?;
-            }
+            inspector.extract_content().await?;
         }
     }
 
