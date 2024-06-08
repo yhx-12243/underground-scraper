@@ -1,3 +1,5 @@
+use std::ffi::OsStr;
+
 use fantoccini::{error::NewSessionError, Client, ClientBuilder};
 use headless_chrome::{Browser, LaunchOptions};
 
@@ -31,23 +33,33 @@ pub fn basic() -> reqwest::Result<reqwest::Client> {
 }
 
 pub async fn get_driver(headless: bool) -> Result<Client, NewSessionError> {
+    use serde_json::Value::{Array, Object, String};
+
     let mut builder = ClientBuilder::native();
+    let mut options = Vec::new();
+    options.push(String("--disable-blink-features=AutomationControlled".to_owned()));
     if headless {
-        builder.capabilities(
-            #[allow(clippy::iter_on_single_items)]
-            Some((
-                "goog:chromeOptions".to_owned(),
-                serde_json::Value::String("--headless".to_owned()),
-            ))
-            .into_iter()
-            .collect(),
-        );
+        options.push(String("--headless".to_owned()));
     }
+    builder.capabilities(
+        #[allow(clippy::iter_on_single_items)]
+        Some((
+            "goog:chromeOptions".to_owned(),
+            Object(
+                Some(("args".to_owned(), Array(options)))
+                    .into_iter()
+                    .collect(),
+            ),
+        ))
+        .into_iter()
+        .collect(),
+    );
     builder.connect("http://localhost:9515").await
 }
 
 pub fn puppeteer(headless: bool, proxy: Option<String>) -> anyhow::Result<Browser> {
     Browser::new(LaunchOptions {
+        args: vec![OsStr::new("--disable-blink-features=AutomationControlled")],
         headless,
         proxy_server: proxy.as_deref(),
         ..LaunchOptions::default()

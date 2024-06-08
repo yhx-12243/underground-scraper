@@ -222,6 +222,61 @@ type Media = ();
 type Entity = ();
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct Button {
+    pub text: String,
+    pub url: Option<String>,
+}
+
+impl From<tl::enums::KeyboardButton> for Button {
+    #[rustfmt::skip]
+    fn from(button: tl::enums::KeyboardButton) -> Self {
+        use tl::enums::KeyboardButton;
+        match button {
+            KeyboardButton::Button(tl::types::KeyboardButton { text }) => Self { text, url: None },
+            KeyboardButton::Url(tl::types::KeyboardButtonUrl { text, url }) => Self { text, url: Some(url) },
+            KeyboardButton::Callback(tl::types::KeyboardButtonCallback { text, .. }) => Self { text, url: None },
+            KeyboardButton::RequestPhone(tl::types::KeyboardButtonRequestPhone { text }) => Self { text, url: None },
+            KeyboardButton::RequestGeoLocation(tl::types::KeyboardButtonRequestGeoLocation { text }) => Self { text, url: None },
+            KeyboardButton::SwitchInline(tl::types::KeyboardButtonSwitchInline { text, .. }) => Self { text, url: None },
+            KeyboardButton::Game(tl::types::KeyboardButtonGame { text }) => Self { text, url: None },
+            KeyboardButton::Buy(tl::types::KeyboardButtonBuy { text }) => Self { text, url: None },
+            KeyboardButton::UrlAuth(tl::types::KeyboardButtonUrlAuth { text, url, .. }) => Self { text, url: Some(url) },
+            KeyboardButton::InputKeyboardButtonUrlAuth(tl::types::InputKeyboardButtonUrlAuth { text, url, .. }) => Self { text, url: Some(url) },
+            KeyboardButton::RequestPoll(tl::types::KeyboardButtonRequestPoll { text, .. }) => Self { text, url: None },
+            KeyboardButton::InputKeyboardButtonUserProfile(tl::types::InputKeyboardButtonUserProfile { text, .. }) => Self { text, url: None },
+            KeyboardButton::UserProfile(tl::types::KeyboardButtonUserProfile { text, .. }) => Self { text, url: None },
+            KeyboardButton::WebView(tl::types::KeyboardButtonWebView { text, url }) => Self { text, url: Some(url) },
+            KeyboardButton::SimpleWebView(tl::types::KeyboardButtonSimpleWebView { text, url }) => Self { text, url: Some(url) },
+            KeyboardButton::RequestPeer(tl::types::KeyboardButtonRequestPeer { text, .. }) => Self { text, url: None },
+            KeyboardButton::InputKeyboardButtonRequestPeer(tl::types::InputKeyboardButtonRequestPeer { text, .. }) => Self { text, url: None },
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ReplyMarkup {
+    pub single_use: Option<bool>,
+    pub selective: Option<bool>,
+    pub placeholder: Option<String>,
+    pub resize: Option<bool>,
+    pub persistent: Option<bool>,
+    pub rows: Vec<Vec<Button>>,
+}
+
+impl From<tl::enums::ReplyMarkup> for ReplyMarkup {
+    #[rustfmt::skip]
+    fn from(markup: tl::enums::ReplyMarkup) -> Self {
+        use tl::enums::ReplyMarkup;
+        match markup {
+            ReplyMarkup::ReplyKeyboardHide(tl::types::ReplyKeyboardHide { selective }) => Self { single_use: None, selective: Some(selective), placeholder: None, resize: None, persistent: None, rows: Vec::new() },
+            ReplyMarkup::ReplyKeyboardForceReply(tl::types::ReplyKeyboardForceReply { single_use, selective, placeholder }) => Self { single_use: Some(single_use), selective: Some(selective), placeholder, resize: None, persistent: None, rows: Vec::new() },
+            ReplyMarkup::ReplyKeyboardMarkup(tl::types::ReplyKeyboardMarkup { resize, single_use, selective, persistent, rows, placeholder }) => Self { single_use: Some(single_use), selective: Some(selective), placeholder, resize: Some(resize), persistent: Some(persistent), rows: rows.into_iter().map(|tl::enums::KeyboardButtonRow::Row(tl::types::KeyboardButtonRow { buttons })|buttons.into_iter().map(Into::into).collect()).collect() },
+            ReplyMarkup::ReplyInlineMarkup(tl::types::ReplyInlineMarkup { rows }) => Self { single_use: None, selective: None, placeholder: None, resize: None, persistent: None, rows: rows.into_iter().map(|tl::enums::KeyboardButtonRow::Row(tl::types::KeyboardButtonRow { buttons })| buttons.into_iter().map(Into::into).collect()).collect() },
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Message {
     pub out: bool,
@@ -244,6 +299,7 @@ pub struct Message {
     #[allow(clippy::struct_field_names)]
     pub message: String,
     pub media: Option<Media>,
+    pub reply_markup: Option<ReplyMarkup>,
     pub entities: Option<Vec<Entity>>,
     pub views: Option<i32>,
     pub forwards: Option<i32>,
@@ -276,6 +332,7 @@ impl From<tl::types::Message> for Message {
             date: message.date,
             message: message.message,
             media: None,
+            reply_markup: message.reply_markup.map(Into::into),
             entities: None,
             views: message.views,
             forwards: message.forwards,
