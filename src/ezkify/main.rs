@@ -44,8 +44,8 @@ async fn insert_db(
     Ok(())
 }
 
-#[allow(clippy::too_many_lines)]
 #[tokio::main]
+#[allow(clippy::too_many_lines)]
 async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;

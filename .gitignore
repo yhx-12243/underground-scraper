@@ -1,8 +1,9 @@
 /patches/alloc.patch
 /patches/core.patch
 /patches/std.patch
+/sessions
 /target
-telegram.session
+telegram.json
 *.aux
 *.bbl
 *.blg

@@ -1,32 +1,32 @@
 use std::{
+    fs::File,
     future::join,
-    io::{self, stdin, stdout, Write},
+    io::{self, stdin, stdout, BufReader, Write},
     path::Path,
 };
 
 use compact_str::CompactString;
 use grammers_client::{client::bots::InvocationError, Client, Config, InitParams};
-use grammers_mtproto::mtp::RpcError;
+use grammers_mtsender::RpcError;
 use grammers_session::{PackedChat, PackedType, Session};
 use grammers_tl_types as tl;
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::types::Json;
 use uscr::db::{get_connection, BB8Error, DBResult, PooledConnection, ToSqlIter};
 use uscr::util::xmax_to_success;
 
-#[allow(clippy::from_str_radix_10)] // false positive (const fn)
-const API_ID: i32 = if let Ok(id) = i32::from_str_radix(env!("TG_ID"), 10) {
-    id
-} else {
-    panic!("invalid API_ID format")
-};
-const API_HASH: &str = env!("TG_HASH");
+pub fn parse_config(file: &Path) -> io::Result<HashMap<i32, String>> {
+    let file = File::open(file)?;
+    let reader = BufReader::new(file);
+    serde_json::from_reader(reader).map_err(io::Error::other)
+}
 
-pub async fn get_client(session_path: &Path) -> io::Result<Client> {
+pub async fn get_client(session_path: &Path, api_id: i32, api_hash: String) -> io::Result<Client> {
     let config = Config {
         session: Session::load_file_or_create(session_path)?,
-        api_id: API_ID,
-        api_hash: API_HASH.to_owned(),
+        api_id,
+        api_hash,
         params: InitParams {
             flood_sleep_threshold: 192,
             ..InitParams::default()
@@ -74,6 +74,7 @@ pub struct Channel {
     pub id: i64,
     pub name: CompactString,
     pub access_hash: i64,
+    pub app_id: i32,
 }
 
 pub async fn access_channel(client: &Client, name: &str) -> anyhow::Result<Channel> {
@@ -103,6 +104,7 @@ pub async fn access_channel(client: &Client, name: &str) -> anyhow::Result<Chann
         id,
         name: chat.username().unwrap_or_else(|| chat.name()).into(),
         access_hash: access_hash.unwrap_or(0),
+        app_id: 0,
     })
 }
 
@@ -148,11 +150,13 @@ pub async fn access_invite(client: &Client, name: &str) -> anyhow::Result<Channe
             id,
             name: username.unwrap_or(title).into(),
             access_hash: access_hash.unwrap_or(0),
+            app_id: 0,
         }),
         Chat::Chat(tl::types::Chat { id, title, .. }) => Ok(Channel {
             id,
             name: title.into(),
             access_hash: 0,
+            app_id: 0,
         }),
         _ => Err(anyhow::anyhow!("type mismatch")),
     }
@@ -195,6 +199,7 @@ where
                 id: channel.id,
                 name: channel.username.unwrap_or(channel.title).into(),
                 access_hash: channel.access_hash.unwrap_or(0),
+                app_id: 0,
             })
         })
         .collect())
@@ -232,23 +237,23 @@ impl From<tl::enums::KeyboardButton> for Button {
     fn from(button: tl::enums::KeyboardButton) -> Self {
         use tl::enums::KeyboardButton;
         match button {
-            KeyboardButton::Button(tl::types::KeyboardButton { text }) => Self { text, url: None },
-            KeyboardButton::Url(tl::types::KeyboardButtonUrl { text, url }) => Self { text, url: Some(url) },
-            KeyboardButton::Callback(tl::types::KeyboardButtonCallback { text, .. }) => Self { text, url: None },
-            KeyboardButton::RequestPhone(tl::types::KeyboardButtonRequestPhone { text }) => Self { text, url: None },
-            KeyboardButton::RequestGeoLocation(tl::types::KeyboardButtonRequestGeoLocation { text }) => Self { text, url: None },
-            KeyboardButton::SwitchInline(tl::types::KeyboardButtonSwitchInline { text, .. }) => Self { text, url: None },
-            KeyboardButton::Game(tl::types::KeyboardButtonGame { text }) => Self { text, url: None },
-            KeyboardButton::Buy(tl::types::KeyboardButtonBuy { text }) => Self { text, url: None },
-            KeyboardButton::UrlAuth(tl::types::KeyboardButtonUrlAuth { text, url, .. }) => Self { text, url: Some(url) },
-            KeyboardButton::InputKeyboardButtonUrlAuth(tl::types::InputKeyboardButtonUrlAuth { text, url, .. }) => Self { text, url: Some(url) },
-            KeyboardButton::RequestPoll(tl::types::KeyboardButtonRequestPoll { text, .. }) => Self { text, url: None },
-            KeyboardButton::InputKeyboardButtonUserProfile(tl::types::InputKeyboardButtonUserProfile { text, .. }) => Self { text, url: None },
-            KeyboardButton::UserProfile(tl::types::KeyboardButtonUserProfile { text, .. }) => Self { text, url: None },
-            KeyboardButton::WebView(tl::types::KeyboardButtonWebView { text, url }) => Self { text, url: Some(url) },
-            KeyboardButton::SimpleWebView(tl::types::KeyboardButtonSimpleWebView { text, url }) => Self { text, url: Some(url) },
-            KeyboardButton::RequestPeer(tl::types::KeyboardButtonRequestPeer { text, .. }) => Self { text, url: None },
-            KeyboardButton::InputKeyboardButtonRequestPeer(tl::types::InputKeyboardButtonRequestPeer { text, .. }) => Self { text, url: None },
+            | KeyboardButton::Button(tl::types::KeyboardButton { text })
+            | KeyboardButton::Callback(tl::types::KeyboardButtonCallback { text, .. })
+            | KeyboardButton::RequestPhone(tl::types::KeyboardButtonRequestPhone { text })
+            | KeyboardButton::RequestGeoLocation(tl::types::KeyboardButtonRequestGeoLocation { text })
+            | KeyboardButton::SwitchInline(tl::types::KeyboardButtonSwitchInline { text, .. })
+            | KeyboardButton::Game(tl::types::KeyboardButtonGame { text })
+            | KeyboardButton::Buy(tl::types::KeyboardButtonBuy { text })
+            | KeyboardButton::RequestPoll(tl::types::KeyboardButtonRequestPoll { text, .. })
+            | KeyboardButton::InputKeyboardButtonUserProfile(tl::types::InputKeyboardButtonUserProfile { text, .. })
+            | KeyboardButton::UserProfile(tl::types::KeyboardButtonUserProfile { text, .. })
+            | KeyboardButton::RequestPeer(tl::types::KeyboardButtonRequestPeer { text, .. })
+            | KeyboardButton::InputKeyboardButtonRequestPeer(tl::types::InputKeyboardButtonRequestPeer { text, .. }) => Self { text, url: None },
+            | KeyboardButton::WebView(tl::types::KeyboardButtonWebView { text, url })
+            | KeyboardButton::SimpleWebView(tl::types::KeyboardButtonSimpleWebView { text, url })
+            | KeyboardButton::Url(tl::types::KeyboardButtonUrl { text, url })
+            | KeyboardButton::UrlAuth(tl::types::KeyboardButtonUrlAuth { text, url, .. })
+            | KeyboardButton::InputKeyboardButtonUrlAuth(tl::types::InputKeyboardButtonUrlAuth { text, url, .. }) => Self { text, url: Some(url) },
         }
     }
 }
@@ -270,7 +275,7 @@ impl From<tl::enums::ReplyMarkup> for ReplyMarkup {
         match markup {
             ReplyMarkup::ReplyKeyboardHide(tl::types::ReplyKeyboardHide { selective }) => Self { single_use: None, selective: Some(selective), placeholder: None, resize: None, persistent: None, rows: Vec::new() },
             ReplyMarkup::ReplyKeyboardForceReply(tl::types::ReplyKeyboardForceReply { single_use, selective, placeholder }) => Self { single_use: Some(single_use), selective: Some(selective), placeholder, resize: None, persistent: None, rows: Vec::new() },
-            ReplyMarkup::ReplyKeyboardMarkup(tl::types::ReplyKeyboardMarkup { resize, single_use, selective, persistent, rows, placeholder }) => Self { single_use: Some(single_use), selective: Some(selective), placeholder, resize: Some(resize), persistent: Some(persistent), rows: rows.into_iter().map(|tl::enums::KeyboardButtonRow::Row(tl::types::KeyboardButtonRow { buttons })|buttons.into_iter().map(Into::into).collect()).collect() },
+            ReplyMarkup::ReplyKeyboardMarkup(tl::types::ReplyKeyboardMarkup { resize, single_use, selective, persistent, rows, placeholder }) => Self { single_use: Some(single_use), selective: Some(selective), placeholder, resize: Some(resize), persistent: Some(persistent), rows: rows.into_iter().map(|tl::enums::KeyboardButtonRow::Row(tl::types::KeyboardButtonRow { buttons })| buttons.into_iter().map(Into::into).collect()).collect() },
             ReplyMarkup::ReplyInlineMarkup(tl::types::ReplyInlineMarkup { rows }) => Self { single_use: None, selective: None, placeholder: None, resize: None, persistent: None, rows: rows.into_iter().map(|tl::enums::KeyboardButtonRow::Row(tl::types::KeyboardButtonRow { buttons })| buttons.into_iter().map(Into::into).collect()).collect() },
         }
     }
