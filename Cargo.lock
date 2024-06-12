@@ -380,9 +380,9 @@ checksum = "0c4b4d0bd25bd0b74681c0ad21497610ce1b7c91b1022cd21c80c6fbdd9476b0"
 
 [[package]]
 name = "backtrace"
-version = "0.3.72"
+version = "0.3.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17c6a35df3749d2e8bb1b7b21a976d82b15548788d2735b9d82f329268f71a11"
+checksum = "5cc23269a4f8976d0a4d2e7109211a419fe30e8d88d677cd60b6bc79c5732e0a"
 dependencies = [
  "addr2line",
  "cc",
@@ -1136,7 +1136,7 @@ dependencies = [
 [[package]]
 name = "grammers-client"
 version = "0.6.0"
-source = "git+https://github.com/Lonami/grammers#a6a5f9a61233db46312e08b6d9c4622ce33b90a5"
+source = "git+https://github.com/Lonami/grammers#f5d167c78fac0d536034762df8301118b6558528"
 dependencies = [
  "chrono",
  "futures-util",
@@ -1158,7 +1158,7 @@ dependencies = [
 [[package]]
 name = "grammers-crypto"
 version = "0.6.1"
-source = "git+https://github.com/Lonami/grammers#a6a5f9a61233db46312e08b6d9c4622ce33b90a5"
+source = "git+https://github.com/Lonami/grammers#f5d167c78fac0d536034762df8301118b6558528"
 dependencies = [
  "aes",
  "getrandom",
@@ -1174,7 +1174,7 @@ dependencies = [
 [[package]]
 name = "grammers-mtproto"
 version = "0.6.0"
-source = "git+https://github.com/Lonami/grammers#a6a5f9a61233db46312e08b6d9c4622ce33b90a5"
+source = "git+https://github.com/Lonami/grammers#f5d167c78fac0d536034762df8301118b6558528"
 dependencies = [
  "bytes",
  "crc32fast",
@@ -1190,7 +1190,7 @@ dependencies = [
 [[package]]
 name = "grammers-mtsender"
 version = "0.5.1"
-source = "git+https://github.com/Lonami/grammers#a6a5f9a61233db46312e08b6d9c4622ce33b90a5"
+source = "git+https://github.com/Lonami/grammers#f5d167c78fac0d536034762df8301118b6558528"
 dependencies = [
  "bytes",
  "futures-util",
@@ -1204,7 +1204,7 @@ dependencies = [
 [[package]]
 name = "grammers-session"
 version = "0.5.2"
-source = "git+https://github.com/Lonami/grammers#a6a5f9a61233db46312e08b6d9c4622ce33b90a5"
+source = "git+https://github.com/Lonami/grammers#f5d167c78fac0d536034762df8301118b6558528"
 dependencies = [
  "grammers-crypto",
  "grammers-tl-gen",
@@ -1216,7 +1216,7 @@ dependencies = [
 [[package]]
 name = "grammers-tl-gen"
 version = "0.6.0"
-source = "git+https://github.com/Lonami/grammers#a6a5f9a61233db46312e08b6d9c4622ce33b90a5"
+source = "git+https://github.com/Lonami/grammers#f5d167c78fac0d536034762df8301118b6558528"
 dependencies = [
  "grammers-tl-parser",
 ]
@@ -1224,7 +1224,7 @@ dependencies = [
 [[package]]
 name = "grammers-tl-parser"
 version = "1.1.1"
-source = "git+https://github.com/Lonami/grammers#a6a5f9a61233db46312e08b6d9c4622ce33b90a5"
+source = "git+https://github.com/Lonami/grammers#f5d167c78fac0d536034762df8301118b6558528"
 dependencies = [
  "crc32fast",
 ]
@@ -1232,7 +1232,7 @@ dependencies = [
 [[package]]
 name = "grammers-tl-types"
 version = "0.6.0"
-source = "git+https://github.com/Lonami/grammers#a6a5f9a61233db46312e08b6d9c4622ce33b90a5"
+source = "git+https://github.com/Lonami/grammers#f5d167c78fac0d536034762df8301118b6558528"
 dependencies = [
  "grammers-tl-gen",
  "grammers-tl-parser",
@@ -1399,12 +1399,12 @@ dependencies = [
 
 [[package]]
 name = "http-body-util"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0475f8b2ac86659c21b64320d5d653f9efe42acd2a4e560073ec61a155a34f1d"
+checksum = "793429d76616a256bcb62c2a2ec2bed781c8307e797e2598c50010f2bee2544f"
 dependencies = [
  "bytes",
- "futures-core",
+ "futures-util",
  "http 1.1.0",
  "http-body 1.0.0",
  "pin-project-lite",
@@ -1412,9 +1412,9 @@ dependencies = [
 
 [[package]]
 name = "httparse"
-version = "1.9.2"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f3935c160d00ac752e09787e6e6bfc26494c2183cc922f1bc678a60d4733bc2"
+checksum = "d0e7a4dd27b9476dc40cb050d3632d3bba3a70ddbff012285f7f8559a1e7e545"
 
 [[package]]
 name = "httpdate"
@@ -1995,9 +1995,9 @@ checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "object"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8ec7ab813848ba4522158d5517a6093db1ded27575b070f4177b8d12b41db5e"
+checksum = "576dfe1fc8f9df304abb159d767a29d0476f7750fbf8aa7ad07816004a207434"
 dependencies = [
  "memchr",
 ]

@@ -1,3 +1,5 @@
+mod types;
+
 use std::{
     fs::File,
     future::join,
@@ -11,10 +13,13 @@ use grammers_mtsender::RpcError;
 use grammers_session::{PackedChat, PackedType, Session};
 use grammers_tl_types as tl;
 use hashbrown::HashMap;
-use serde::{Deserialize, Serialize};
 use tokio_postgres::types::Json;
-use uscr::db::{get_connection, BB8Error, DBResult, PooledConnection, ToSqlIter};
-use uscr::util::xmax_to_success;
+use uscr::{
+    db::{get_connection, BB8Error, DBResult, PooledConnection, ToSqlIter},
+    util::xmax_to_success,
+};
+
+use types::Message;
 
 pub fn parse_config(file: &Path) -> io::Result<HashMap<i32, String>> {
     let file = File::open(file)?;
@@ -22,13 +27,18 @@ pub fn parse_config(file: &Path) -> io::Result<HashMap<i32, String>> {
     serde_json::from_reader(reader).map_err(io::Error::other)
 }
 
-pub async fn get_client(session_path: &Path, api_id: i32, api_hash: String) -> io::Result<Client> {
+pub async fn get_client(
+    session_path: &Path,
+    api_id: i32,
+    api_hash: String,
+    flood_sleep_threshold: u32,
+) -> io::Result<Client> {
     let config = Config {
         session: Session::load_file_or_create(session_path)?,
         api_id,
         api_hash,
         params: InitParams {
-            flood_sleep_threshold: 192,
+            flood_sleep_threshold,
             ..InitParams::default()
         },
     };
@@ -221,133 +231,6 @@ pub async fn get_channel_info(
 
     let Full(result) = client.invoke(&request).await?;
     Ok(result)
-}
-
-type Media = ();
-type Entity = ();
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Button {
-    pub text: String,
-    pub url: Option<String>,
-}
-
-impl From<tl::enums::KeyboardButton> for Button {
-    #[rustfmt::skip]
-    fn from(button: tl::enums::KeyboardButton) -> Self {
-        use tl::enums::KeyboardButton;
-        match button {
-            | KeyboardButton::Button(tl::types::KeyboardButton { text })
-            | KeyboardButton::Callback(tl::types::KeyboardButtonCallback { text, .. })
-            | KeyboardButton::RequestPhone(tl::types::KeyboardButtonRequestPhone { text })
-            | KeyboardButton::RequestGeoLocation(tl::types::KeyboardButtonRequestGeoLocation { text })
-            | KeyboardButton::SwitchInline(tl::types::KeyboardButtonSwitchInline { text, .. })
-            | KeyboardButton::Game(tl::types::KeyboardButtonGame { text })
-            | KeyboardButton::Buy(tl::types::KeyboardButtonBuy { text })
-            | KeyboardButton::RequestPoll(tl::types::KeyboardButtonRequestPoll { text, .. })
-            | KeyboardButton::InputKeyboardButtonUserProfile(tl::types::InputKeyboardButtonUserProfile { text, .. })
-            | KeyboardButton::UserProfile(tl::types::KeyboardButtonUserProfile { text, .. })
-            | KeyboardButton::RequestPeer(tl::types::KeyboardButtonRequestPeer { text, .. })
-            | KeyboardButton::InputKeyboardButtonRequestPeer(tl::types::InputKeyboardButtonRequestPeer { text, .. }) => Self { text, url: None },
-            | KeyboardButton::WebView(tl::types::KeyboardButtonWebView { text, url })
-            | KeyboardButton::SimpleWebView(tl::types::KeyboardButtonSimpleWebView { text, url })
-            | KeyboardButton::Url(tl::types::KeyboardButtonUrl { text, url })
-            | KeyboardButton::UrlAuth(tl::types::KeyboardButtonUrlAuth { text, url, .. })
-            | KeyboardButton::InputKeyboardButtonUrlAuth(tl::types::InputKeyboardButtonUrlAuth { text, url, .. }) => Self { text, url: Some(url) },
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ReplyMarkup {
-    pub single_use: Option<bool>,
-    pub selective: Option<bool>,
-    pub placeholder: Option<String>,
-    pub resize: Option<bool>,
-    pub persistent: Option<bool>,
-    pub rows: Vec<Vec<Button>>,
-}
-
-impl From<tl::enums::ReplyMarkup> for ReplyMarkup {
-    #[rustfmt::skip]
-    fn from(markup: tl::enums::ReplyMarkup) -> Self {
-        use tl::enums::ReplyMarkup;
-        match markup {
-            ReplyMarkup::ReplyKeyboardHide(tl::types::ReplyKeyboardHide { selective }) => Self { single_use: None, selective: Some(selective), placeholder: None, resize: None, persistent: None, rows: Vec::new() },
-            ReplyMarkup::ReplyKeyboardForceReply(tl::types::ReplyKeyboardForceReply { single_use, selective, placeholder }) => Self { single_use: Some(single_use), selective: Some(selective), placeholder, resize: None, persistent: None, rows: Vec::new() },
-            ReplyMarkup::ReplyKeyboardMarkup(tl::types::ReplyKeyboardMarkup { resize, single_use, selective, persistent, rows, placeholder }) => Self { single_use: Some(single_use), selective: Some(selective), placeholder, resize: Some(resize), persistent: Some(persistent), rows: rows.into_iter().map(|tl::enums::KeyboardButtonRow::Row(tl::types::KeyboardButtonRow { buttons })| buttons.into_iter().map(Into::into).collect()).collect() },
-            ReplyMarkup::ReplyInlineMarkup(tl::types::ReplyInlineMarkup { rows }) => Self { single_use: None, selective: None, placeholder: None, resize: None, persistent: None, rows: rows.into_iter().map(|tl::enums::KeyboardButtonRow::Row(tl::types::KeyboardButtonRow { buttons })| buttons.into_iter().map(Into::into).collect()).collect() },
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct Message {
-    pub out: bool,
-    pub mentioned: bool,
-    pub media_unread: bool,
-    pub silent: bool,
-    pub post: bool,
-    pub from_scheduled: bool,
-    pub legacy: bool,
-    pub edit_hide: bool,
-    pub pinned: bool,
-    pub noforwards: bool,
-    pub invert_media: bool,
-    pub offline: bool,
-    pub id: i32,
-    pub from_boosts_applied: Option<i32>,
-    pub via_bot_id: Option<i64>,
-    pub via_business_bot_id: Option<i64>,
-    pub date: i32,
-    #[allow(clippy::struct_field_names)]
-    pub message: String,
-    pub media: Option<Media>,
-    pub reply_markup: Option<ReplyMarkup>,
-    pub entities: Option<Vec<Entity>>,
-    pub views: Option<i32>,
-    pub forwards: Option<i32>,
-    pub edit_date: Option<i32>,
-    pub post_author: Option<String>,
-    pub grouped_id: Option<i64>,
-    pub ttl_period: Option<i32>,
-    pub quick_reply_shortcut_id: Option<i32>,
-}
-
-impl From<tl::types::Message> for Message {
-    fn from(message: tl::types::Message) -> Self {
-        Self {
-            out: message.out,
-            mentioned: message.mentioned,
-            media_unread: message.media_unread,
-            silent: message.silent,
-            post: message.post,
-            from_scheduled: message.from_scheduled,
-            legacy: message.legacy,
-            edit_hide: message.edit_hide,
-            pinned: message.pinned,
-            noforwards: message.noforwards,
-            invert_media: message.invert_media,
-            offline: message.offline,
-            id: message.id,
-            from_boosts_applied: message.from_boosts_applied,
-            via_bot_id: message.via_bot_id,
-            via_business_bot_id: message.via_business_bot_id,
-            date: message.date,
-            message: message.message,
-            media: None,
-            reply_markup: message.reply_markup.map(Into::into),
-            entities: None,
-            views: message.views,
-            forwards: message.forwards,
-            edit_date: message.edit_date,
-            post_author: message.post_author,
-            grouped_id: message.grouped_id,
-            ttl_period: message.ttl_period,
-            quick_reply_shortcut_id: message.quick_reply_shortcut_id,
-        }
-    }
 }
 
 async fn insert_to_db(

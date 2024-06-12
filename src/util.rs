@@ -1,4 +1,4 @@
-use std::{ascii::Char, time::SystemTime};
+use std::{ascii::Char, ffi::OsString, path::PathBuf, time::SystemTime};
 
 const TEMPLATE_DATE: [Char; 29] = *b"Sun, 0D MMM YYYY_hh_mm:00 GMT".as_ascii().unwrap();
 
@@ -40,4 +40,34 @@ where
 {
     rows.filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0))
         .count()
+}
+
+pub trait SetLenExt {
+    unsafe fn set_len(&mut self, len: usize);
+}
+
+impl SetLenExt for OsString {
+    #[inline]
+    unsafe fn set_len(&mut self, len: usize) {
+        #[cfg(feature = "patch-std")]
+        unsafe {
+            self.as_mut_vec_for_path_buf().set_len(len);
+        }
+
+        #[cfg(not(feature = "patch-std"))]
+        unsafe {
+            let mut vec = core::ptr::read(self).into_encoded_bytes();
+            vec.set_len(len);
+            core::ptr::write(self, Self::from_encoded_bytes_unchecked(vec));
+        }
+    }
+}
+
+impl SetLenExt for PathBuf {
+    #[inline]
+    unsafe fn set_len(&mut self, len: usize) {
+        unsafe {
+            self.as_mut_os_string().set_len(len);
+        }
+    }
 }

@@ -112,6 +112,13 @@ struct Args {
         help = "The config file"
     )]
     config: std::path::PathBuf,
+    #[arg(
+        long,
+        default_value_t = 192,
+        value_name = "seconds",
+        help = "flood sleep threshold"
+    )]
+    flood_sleep_threshold: u32,
 }
 
 #[derive(clap::Subcommand)]
@@ -137,6 +144,7 @@ enum Commands {
 async fn main() -> anyhow::Result<()> {
     use clap::Parser;
     use hashbrown::{HashMap, HashSet};
+    use uscr::util::SetLenExt;
 
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;
@@ -149,11 +157,9 @@ async fn main() -> anyhow::Result<()> {
     let mut dir = args.session;
     let dir_len = dir.as_os_str().len();
     for (id, hash) in config {
-        dir.as_mut_os_string()
-            .as_mut_vec_for_path_buf()
-            .truncate(dir_len);
+        unsafe { dir.set_len(dir_len) };
         dir.push(format!("{id}"));
-        let client = match telegram::get_client(&dir, id, hash).await {
+        let client = match telegram::get_client(&dir, id, hash, args.flood_sleep_threshold).await {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!(target: "client-setup(get_client)", id, ?e);
@@ -261,9 +267,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     for (id, client) in &clients {
-        dir.as_mut_os_string()
-            .as_mut_vec_for_path_buf()
-            .truncate(dir_len);
+        unsafe { dir.set_len(dir_len) };
         dir.push(format!("{id}"));
         if let Err(e) = telegram::save(client, &dir) {
             tracing::error!(target: "client-shutdown(save)", id, ?e);
