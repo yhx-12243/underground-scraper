@@ -10,7 +10,7 @@ repository = "https://github.com/yhx-12243/underground-scraper"
 
 [dependencies]
 actix-cors = { version = "0.7.0", features = ["draft-private-network-access"] }
-actix-web = "4.7.0"
+actix-web = "4.8.0"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 bb8-postgres = { version = "0.8.1", features = ["with-serde_json-1"] }
 bytes = { version = "1.6.0", features = ["serde"] }
@@ -34,13 +34,15 @@ postgres-protocol = "0.6.6"
 pretty_env_logger = "0.5.0"
 rand = { version = "0.8.5", features = ["log", "nightly"] }
 regex = "1.10.4"
-reqwest = { version = "0.12.4", features = ["json", "native-tls-alpn"] }
+reqwest = { version = "0.12.5", features = ["json", "native-tls-alpn"] }
+rpassword = "7.3.1"
 scraper = "0.19.0"
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = { version = "1.0.117", features = ["float_roundtrip"] }
 tokio = { version = "1.38.0", features = ["macros", "parking_lot", "rt-multi-thread", "tracing"] }
 tokio-postgres = { version = "0.7.10", features = ["with-serde_json-1"] }
 tracing = { version = "0.1.40", features = ["log", "release_max_level_info"] }
+unicase = { version = "2.7.0", features = ["nightly"] }
 
 [features]
 patch-std = []
@@ -55,10 +57,10 @@ nursery = { level = "warn", priority = -1 }
 absolute_paths = { level = "allow", priority = 1 }
 arithmetic_side_effects = { level = "allow", priority = 1 }
 as_conversions = { level = "allow", priority = 1 }
-cast_lossless = { level = "allow", priority = 1 } # u32 -> u64
+# cast_lossless = { level = "allow", priority = 1 } # u32 -> u64
 cast_possible_truncation = { level = "allow", priority = 1 } # u64 -> u32
-cast_possible_wrap = { level = "allow", priority = 1 } # u32 -> i32
-cast_sign_loss = { level = "allow", priority = 1 } # i32 -> u32
+# cast_possible_wrap = { level = "allow", priority = 1 } # u32 -> i32
+# cast_sign_loss = { level = "allow", priority = 1 } # i32 -> u32
 default_numeric_fallback = { level = "allow", priority = 1 }
 option_if_let_else = { level = "allow", priority = 1 }
 future_not_send = { level = "allow", priority = 1 }
@@ -124,6 +126,10 @@ path = "src/ezkify/main.rs"
 [[bin]]
 name = "telegram"
 path = "src/telegram/main.rs"
+
+[[bin]]
+name = "tsc"
+path = "src/telegram-session-convert/main.rs"
 
 [[bin]]
 name = "discord"

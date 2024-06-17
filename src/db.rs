@@ -133,7 +133,7 @@ where
         };
 
         let dimension = postgres_protocol::types::ArrayDimension {
-            len: self.0.len() as i32,
+            len: self.0.len().try_into()?,
             lower_bound,
         };
 

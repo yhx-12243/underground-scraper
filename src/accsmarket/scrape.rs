@@ -67,7 +67,7 @@ pub async fn work(id: i64, c_desc: String, ctx: &Context) {
 
         let hash = BuildHasherDefault::<DefaultHasher>::default().hash_one(&desc);
 
-        archived.push((hash as i64, desc, quantity, cost));
+        archived.push((hash.cast_signed(), desc, quantity, cost));
     }
 
     if !archived.is_empty() {

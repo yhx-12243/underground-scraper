@@ -60,7 +60,7 @@ pub struct Browser {
 }
 
 impl Browser {
-    pub fn new(
+    pub const fn new(
         tab: Arc<Tab>,
         tx: UnboundedSender<ConfigHeaders>,
         user_agent: &'static str,

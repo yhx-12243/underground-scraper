@@ -44,6 +44,7 @@ where
 
 pub trait SetLenExt {
     unsafe fn set_len(&mut self, len: usize);
+    fn append_i32(&mut self, value: i32);
 }
 
 impl SetLenExt for OsString {
@@ -61,6 +62,18 @@ impl SetLenExt for OsString {
             core::ptr::write(self, Self::from_encoded_bytes_unchecked(vec));
         }
     }
+
+    fn append_i32(&mut self, value: i32) {
+        #[cfg(feature = "patch-std")]
+        unsafe {
+            let inner = NonNull::from(self.as_mut_vec_for_path_buf()).cast::<String>().as_mut();
+            let mut fmt = core::fmt::Formatter::new(inner);
+            let _ = value.fmt(&mut fmt);
+        }
+
+        #[cfg(not(feature = "patch-std"))]
+        self.push(format!("{value}"));
+    }
 }
 
 impl SetLenExt for PathBuf {
@@ -69,5 +82,16 @@ impl SetLenExt for PathBuf {
         unsafe {
             self.as_mut_os_string().set_len(len);
         }
+    }
+
+    fn append_i32(&mut self, value: i32) {
+        #[cfg(feature = "patch-std")]
+        unsafe {
+            self.push("");
+            self.as_mut_os_string().append_i32(value);
+        }
+
+        #[cfg(not(feature = "patch-std"))]
+        self.push(format!("{value}"));
     }
 }

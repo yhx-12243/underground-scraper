@@ -35,3 +35,44 @@ index c7f53fd..7fe2a81 100644
      /// Whether the message is outgoing (i.e. you sent this message to some other chat) or
      /// incoming (i.e. someone else sent it to you or the chat).
      pub fn outgoing(&self) -> bool {
+diff --git a/lib/grammers-session/src/lib.rs b/lib/grammers-session/src/lib.rs
+index 2a2b1bd..80d0af7 100644
+--- a/lib/grammers-session/src/lib.rs
++++ b/lib/grammers-session/src/lib.rs
+@@ -16,8 +16,8 @@ pub use chat::{ChatHashCache, PackedChat, PackedType};
+ pub use generated::types::UpdateState;
+ pub use generated::types::User;
+ pub use generated::LAYER as VERSION;
+-use generated::{enums, types};
+-use grammers_tl_types::deserialize::Error as DeserializeError;
++pub use generated::{enums, types};
++pub use grammers_tl_types::deserialize::Error as DeserializeError;
+ pub use message_box::{channel_id, PrematureEndReason};
+ pub use message_box::{Gap, MessageBox};
+ use std::fmt;
+@@ -34,6 +34,14 @@ pub struct Session {
+     session: Mutex<types::Session>,
+ }
+ 
++impl From<types::Session> for Session {
++    fn from(session: types::Session) -> Self {
++        Self {
++            session: Mutex::new(session),
++        }
++    }
++}
++
+ #[allow(clippy::new_without_default)]
+ impl Session {
+     pub fn new() -> Self {
+@@ -148,6 +156,10 @@ impl Session {
+             .map(|enums::User::User(user)| user.clone())
+     }
+ 
++    pub fn get(&self) -> types::Session {
++        self.session.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
++    }
++
+     pub fn get_state(&self) -> Option<UpdateState> {
+         let session = self.session.lock().unwrap();
+         let enums::UpdateState::State(state) = session.state.clone()?;

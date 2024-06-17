@@ -1,4 +1,4 @@
-#![feature(try_blocks)]
+#![feature(integer_sign_cast, try_blocks)]
 
 mod scrape;
 
@@ -39,9 +39,7 @@ async fn main() -> anyhow::Result<()> {
                     desc = h2.text().map(str::trim).collect();
                 }
             }
-            Some("socs") => {
-                futs.push(scrape::work(id, core::mem::take(&mut desc), &ctx));
-            }
+            Some("socs") => futs.push(scrape::work(id, core::mem::take(&mut desc), &ctx)),
             e => tracing::warn!(target: "soc-bl", "Unknown class: {e:?}"),
         }
     }
