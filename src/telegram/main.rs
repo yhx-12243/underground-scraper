@@ -88,7 +88,7 @@ struct Args {
     #[arg(
         short,
         long,
-        default_value = "./sessions",
+        default_value = "./telegram/sessions",
         value_name = "dir",
         help = "The directory that stores sessions"
     )]
@@ -96,7 +96,7 @@ struct Args {
     #[arg(
         short,
         long,
-        default_value = "telegram.json",
+        default_value = "./telegram/config.json",
         value_name = "file",
         help = "The config file"
     )]

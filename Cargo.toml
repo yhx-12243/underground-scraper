@@ -127,14 +127,6 @@ path = "src/ezkify/main.rs"
 name = "telegram"
 path = "src/telegram/main.rs"
 
-[[bin]]
-name = "tsc"
-path = "src/telegram-session-convert/main.rs"
-
-[[bin]]
-name = "discord"
-path = "src/discord/main.rs"
-
 [lib]
 name = "uscr"
 path = "src/lib.rs"

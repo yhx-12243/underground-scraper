@@ -127,8 +127,7 @@ impl Worker {
                                 }
                             }
                         }
-                        let t = rng.gen_range(2400..3000);
-                        Duration::from_millis(t)
+                        Duration::from_millis(rng.gen_range(2400..3000))
                     }
                     Ok(text) => {
                         log::warn!(target: &target, "\x1b[31mwrong\x1b[0m {url}: {text}");

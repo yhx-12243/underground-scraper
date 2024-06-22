@@ -1,5 +1,6 @@
 use std::{
-    io::{self, stdin, stdout, Write as _},
+    io::{self, stdin, stdout, BufRead, Write},
+    os::fd::{AsFd, AsRawFd},
     path::{Path, PathBuf},
 };
 
@@ -42,9 +43,7 @@ impl Client {
         let mut phone = String::with_capacity(32);
         while !self.inner.is_authorized().await.map_err(io::Error::other)? {
             if phone.is_empty() {
-                let mut stdout = stdout();
-                stdout.write_all(b"Please enter your phone: ")?;
-                stdout.flush()?;
+                stdout().write_all(b"Please enter your phone: ")?;
                 stdin().read_line(&mut phone)?;
             }
             let token = self
@@ -54,25 +53,23 @@ impl Client {
                 .map_err(io::Error::other)?;
 
             let mut code = String::with_capacity(32);
-            {
-                let mut stdout = stdout();
-                stdout.write_all(b"Please enter the code you received: ")?;
-                stdout.flush()?;
-                stdin().read_line(&mut code)?;
-            }
+            stdout().write_all(b"Please enter the code you received: ")?;
+            stdin().read_line(&mut code)?;
             match self.inner.sign_in(&token, code.trim()).await {
                 Ok(_) => (),
                 Err(SignInError::PasswordRequired(password_token)) => {
-                    let password = {
-                        let mut stdout = stdout();
-                        if let Some(hint) = password_token.hint() {
-                            write!(stdout, "Please enter your password (hint: {hint}): ")
-                        } else {
-                            stdout.write_all(b"Please enter your password: ")
-                        }?;
-                        stdout.flush()?;
-                        rpassword::read_password_from_bufread(&mut stdin().lock())
+                    if let Some(hint) = password_token.hint() {
+                        write!(stdout(), "Please enter your password (hint: {hint}): ")
+                    } else {
+                        stdout().write_all(b"Please enter your password: ")
                     }?;
+                    let mut password = String::with_capacity(32);
+                    {
+                        let mut stdin = stdin().lock();
+                        let fd = stdin.as_fd().as_raw_fd();
+                        let _hi = rpassword::HiddenInput::new(fd);
+                        stdin.read_line(&mut password)?;
+                    };
                     self.inner
                         .check_password(password_token, password.trim())
                         .await

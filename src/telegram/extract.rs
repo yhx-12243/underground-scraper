@@ -149,9 +149,7 @@ impl Inspector {
         let mut conn = get_connection().await?;
         let mut conn2 = get_connection().await?;
         let stmt = conn.prepare_static(SQL.into()).await?;
-        let stream = conn
-            .query_raw(&stmt, core::iter::empty::<&dyn ToSql>())
-            .await?;
+        let stream = conn.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
         let mut stream = pin!(stream);
 
         let mut cnt = 0;

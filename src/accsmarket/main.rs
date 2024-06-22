@@ -33,12 +33,10 @@ async fn main() -> anyhow::Result<()> {
     let mut futs = Vec::new();
     for child in container.child_elements() {
         match child.attr("class") {
-            Some("soc-title") => {
-                if let Some(h2) = child.select(&sel_h2).next() {
-                    id = h2.attr("data-id").and_then(|x| x.parse().ok()).unwrap_or(0);
-                    desc = h2.text().map(str::trim).collect();
-                }
-            }
+            Some("soc-title") => if let Some(h2) = child.select(&sel_h2).next() {
+                id = h2.attr("data-id").and_then(|x| x.parse().ok()).unwrap_or(0);
+                desc = h2.text().map(str::trim).collect();
+            },
             Some("socs") => futs.push(scrape::work(id, core::mem::take(&mut desc), &ctx)),
             e => tracing::warn!(target: "soc-bl", "Unknown class: {e:?}"),
         }
