@@ -66,8 +66,8 @@
 	\frame {
 		\begin{figure}
 			\centering
-			\includegraphics[scale=.15]{assets/accs3.png}
-			\caption{Quantity--time curve}
+			\includegraphics[scale=.14]{assets/accs3.png}
+			\caption{(Quantity, Price, Time) curves}
 		\end{figure}
 	}
 
@@ -433,12 +433,12 @@ export RUST_LOG=info
 		\begin{enumerate}
 			\item Attempt to characterize the Telegram ecosystem
 				\begin{itemize}
-					\item<2-> We need a HUGE dataset
-					\item<3-> Telegram has tight rate limit on username resolve
-						
+					\item<2-> We need a HUGE and representative dataset
+					\item<3-> Telegram has a tight rate limit on username resolve
+
 						\leavevmode
 				\end{itemize}
-			\item<6-> Dark-web markets analysis
+			\item<6-> \compress{-50pt}{Characterize the usage of Telegram's programmatic infrastructure}
 			\item<7-> Bot behavior analysis
 			\item<8-> Connection graph
 			\item<9-> Data comparison with pushshift, etc.
@@ -452,17 +452,17 @@ export RUST_LOG=info
 				\draw[->, green!80!black] (present) -- +(0, -1);
 			}
 			\only<11->{
-				\node[draw, align=justify, inner sep=3pt, blue] (btn) at (5.5, -1.25) {extract message, bot\\[-4pt]buttons/interactions};
+				\node[draw, align=justify, inner sep=3pt, blue] (btn) at (5.5, -1.3) {extract message, bot\\[-4pt]buttons/interactions};
 				\draw[<-, blue] (btn) -- +(-2.75, 0);
 			}
 			\only<12->{
-				\draw[->, fuchsia] (btn.north) to[bend right=15, ', "?"] (3.5, -0.5);
+				\draw[->, fuchsia] (btn.east) to[bend right=15, ', "?"] +(0.8, 0.6);
 			}
 			\only<13->{
-				\node[draw, align=justify, inner sep=3pt, fuchsia] at (7.3, 0) {\small Most bots won't exposure their\\[-4pt]\small website or use other methods};
+				\node[draw, align=justify, inner sep=3pt, fuchsia] at (7.3, 0.03) {\small Most bots won't expose\\[-5pt]\small their websites or \smash{techniques}};
 			}
 			\only<14->{
-				\node[draw=red, inner sep=3pt, rotate=15, fill=white, text=red, fill opacity=.5, text opacity=1] at (4.35, -0.4) {Hard};
+				\node[draw=red, inner sep=3pt, rotate=15, fill=white, text=red, fill opacity=.5, text opacity=1] at (8, -1.1) {\large Hard};
 			}
 			\only<15->{
 				\node[draw=properpurple, inner sep=3pt, fill=white, text=properpurple, fill opacity=.833333, text opacity=1] (topAnal) at (4.333333, -2.5) {Topic analysis};
@@ -510,7 +510,7 @@ export RUST_LOG=info
 			\draw[->, blue] (urls) -- node[midway, auto, inner sep=1pt] {extract} (tiUrls);
 
 			\draw[->, semithick, blue] (tiUrls) -- (idList);
-	
+
 			\only<2->{
 				\node[draw, align=left, inner sep=3pt, red] (h1) at (0.666667, 1.666667) {\footnotesize tightest pipe restriction:\\[-6pt]\footnotesize200 usernames daily};
 				\draw[->, red] (h1) -- (1.4, -0.4);
