@@ -116,12 +116,14 @@ DROP SCHEMA IF EXISTS ezkify CASCADE;
 CREATE SCHEMA ezkify;
 
 CREATE TABLE ezkify.categories (
+    key text NOT NULL,
     id bigint NOT NULL,
     "desc" text NOT NULL,
-    PRIMARY KEY (id, "time"),
+    PRIMARY KEY (key, id),
 );
 
 CREATE TABLE ezkify.items (
+    key text NOT NULL,
     id bigint NOT NULL,
     "time" timestamp without time zone NOT NULL,
     category_id bigint NOT NULL,
@@ -130,8 +132,8 @@ CREATE TABLE ezkify.items (
     min_order bigint NOT NULL,
     max_order bigint NOT NULL,
     description text NOT NULL,
-    PRIMARY KEY (id, "time"),
-    FOREIGN KEY (category_id) REFERENCES ezkify.categories(id)
+    PRIMARY KEY (key, id, "time"),
+    FOREIGN KEY (key, category_id) REFERENCES ezkify.categories(key, id)
 );
 ```
 

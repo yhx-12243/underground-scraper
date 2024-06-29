@@ -8,7 +8,7 @@
     ptr_sub_ptr,
     string_deref_patterns,
     try_blocks,
-    yeet_expr
+    yeet_expr,
 )]
 
 mod extract;

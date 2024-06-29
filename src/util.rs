@@ -50,12 +50,6 @@ pub trait SetLenExt {
 impl SetLenExt for OsString {
     #[inline]
     unsafe fn set_len(&mut self, len: usize) {
-        #[cfg(feature = "patch-std")]
-        unsafe {
-            self.as_mut_vec_for_path_buf().set_len(len);
-        }
-
-        #[cfg(not(feature = "patch-std"))]
         unsafe {
             let mut vec = core::ptr::read(self).into_encoded_bytes();
             vec.set_len(len);
@@ -64,15 +58,12 @@ impl SetLenExt for OsString {
     }
 
     fn append_i32(&mut self, value: i32) {
-        #[cfg(feature = "patch-std")]
         unsafe {
-            let inner = NonNull::from(self.as_mut_vec_for_path_buf()).cast::<String>().as_mut();
+            use std::fmt::Display;
+            let inner = core::ptr::NonNull::from(self).cast::<String>().as_mut();
             let mut fmt = core::fmt::Formatter::new(inner);
             let _ = value.fmt(&mut fmt);
         }
-
-        #[cfg(not(feature = "patch-std"))]
-        self.push(format!("{value}"));
     }
 }
 
@@ -85,13 +76,7 @@ impl SetLenExt for PathBuf {
     }
 
     fn append_i32(&mut self, value: i32) {
-        #[cfg(feature = "patch-std")]
-        unsafe {
-            self.push("");
-            self.as_mut_os_string().append_i32(value);
-        }
-
-        #[cfg(not(feature = "patch-std"))]
-        self.push(format!("{value}"));
+        self.push("");
+        self.as_mut_os_string().append_i32(value);
     }
 }

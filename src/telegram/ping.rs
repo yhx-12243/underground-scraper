@@ -125,8 +125,7 @@ async fn access_invite(
             username,
             ..
         }) => {
-            db.conn.execute(db.stmt_invite, &[&name, &id, &(b'C'.cast_signed())])
-                .await?;
+            db.conn.execute(db.stmt_invite, &[&name, &id, &(b'C'.cast_signed())]).await?;
 
             Ok(Channel {
                 id,
@@ -136,8 +135,7 @@ async fn access_invite(
             })
         }
         Chat::Chat(tl::types::Chat { id, title, .. }) => {
-            db.conn.execute(db.stmt_invite, &[&name, &id, &(b'G'.cast_signed())])
-                .await?;
+            db.conn.execute(db.stmt_invite, &[&name, &id, &(b'G'.cast_signed())]).await?;
 
             Ok(Channel {
                 id,

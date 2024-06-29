@@ -60,8 +60,7 @@ where
             .collect(),
     };
 
-    let (Chats::Chats(messages::Chats { chats })
-    | Chats::Slice(messages::ChatsSlice { chats, .. })) = client.inner.invoke(&request).await?;
+    let (Chats::Chats(messages::Chats { chats }) | Chats::Slice(messages::ChatsSlice { chats, .. })) = client.inner.invoke(&request).await?;
 
     Ok(chats
         .into_iter()
