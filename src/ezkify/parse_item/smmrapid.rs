@@ -8,17 +8,14 @@ pub fn parse(item: ElementRef, modal: ElementRef) -> anyhow::Result<Item> {
     let sel_content = scraper::Selector::parse(".content").unwrap();
 
     let cells = item
-		.child_elements()
-		.next()
-		.ok_or_else(|| anyhow::anyhow!("empty item"))?
+        .child_elements()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("empty item"))?
         .child_elements()
         .next_chunk::<5>()
         .map_err(|e| anyhow::anyhow!("child error: {e:?}"))?;
 
-	let Some(id) = item
-        .attr("data-service-id")
-        .and_then(|x| x.parse().ok())
-    else {
+    let Some(id) = item.attr("data-service-id").and_then(|x| x.parse().ok()) else {
         anyhow::bail!("id error: {}", cells[0].html());
     };
 

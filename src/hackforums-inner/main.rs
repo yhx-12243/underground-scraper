@@ -1,4 +1,4 @@
-#![feature(hint_assert_unchecked, try_blocks)]
+#![feature(try_blocks)]
 
 mod service;
 
