@@ -20,7 +20,7 @@ compact_str = { version = "0.8.0-beta", features = ["serde"] }
 const_format = "0.2.32"
 fantoccini = "0.19.3"
 futures-util = "0.3.30"
-grammers-client = { git = "https://github.com/Lonami/grammers", features = ["parse_invite_link"] }
+grammers-client = { git = "https://github.com/Lonami/grammers", features = ["parse_invite_link", "proxy"] }
 grammers-mtsender = { git = "https://github.com/Lonami/grammers" }
 grammers-session = { git = "https://github.com/Lonami/grammers" }
 grammers-tl-types = { git = "https://github.com/Lonami/grammers" }

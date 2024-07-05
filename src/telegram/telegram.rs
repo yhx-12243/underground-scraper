@@ -8,7 +8,7 @@ use std::{
     path::Path,
 };
 
-use client::Client;
+use client::{Client, InitConfig};
 use compact_str::CompactString;
 use grammers_client::client::bots::InvocationError;
 use grammers_mtsender::RpcError;
@@ -23,7 +23,7 @@ use uscr::{
 
 use types::Message;
 
-pub fn parse_config(file: &Path) -> io::Result<HashMap<i32, String>> {
+pub fn parse_config(file: &Path) -> io::Result<HashMap<i32, InitConfig>> {
     let file = File::open(file)?;
     let reader = BufReader::new(file);
     serde_json::from_reader(reader).map_err(io::Error::other)

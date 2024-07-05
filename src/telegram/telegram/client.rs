@@ -7,6 +7,13 @@ use std::{
 use grammers_client::{Client as ClientInner, Config, InitParams, SignInError};
 use grammers_session::Session;
 use hashbrown::HashMap;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct InitConfig {
+    pub hash: String,
+    pub proxy: Option<String>,
+}
 
 pub struct Client {
     pub inner: ClientInner,
@@ -17,15 +24,16 @@ impl Client {
     pub async fn new(
         session_path: &Path,
         api_id: i32,
-        api_hash: String,
+        init_config: InitConfig,
         flood_sleep_threshold: u32,
     ) -> io::Result<Self> {
         let config = Config {
             session: Session::load_file_or_create(session_path)?,
             api_id,
-            api_hash,
+            api_hash: init_config.hash,
             params: InitParams {
                 flood_sleep_threshold,
+                proxy_url: init_config.proxy,
                 ..InitParams::default()
             },
         };
@@ -87,7 +95,7 @@ impl Client {
 }
 
 pub async fn init_clients_from_map(
-    map: HashMap<i32, String>,
+    map: HashMap<i32, InitConfig>,
     mut session_dir: PathBuf,
     flood_sleep_threshold: u32,
 ) -> HashMap<i32, Client> {
@@ -95,32 +103,33 @@ pub async fn init_clients_from_map(
 
     let mut clients = HashMap::with_capacity(map.len());
     let dir_len = session_dir.as_os_str().len();
-    for (id, hash) in map {
+    for (api_id, init_config) in map {
         unsafe {
             session_dir.set_len(dir_len);
         }
-        session_dir.append_i32(id);
+        session_dir.append_i32(api_id);
 
-        let client = match Client::new(&session_dir, id, hash, flood_sleep_threshold).await {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::error!(target: "client-setup(get_client)", id, ?e);
-                continue;
-            }
-        };
+        let client =
+            match Client::new(&session_dir, api_id, init_config, flood_sleep_threshold).await {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!(target: "client-setup(get_client)", api_id, ?e);
+                    continue;
+                }
+            };
         if let Err(e) = client.login().await {
-            tracing::error!(target: "client-setup(login)", id, ?e);
+            tracing::error!(target: "client-setup(login)", api_id, ?e);
             continue;
         }
         if let Err(e) = client.save() {
-            tracing::error!(target: "client-setup(save)", id, ?e);
+            tracing::error!(target: "client-setup(save)", api_id, ?e);
             continue;
         }
         eprintln!(
-            "\x1b[33m{id}\x1b[0m => \x1b[36m{:#?}\x1b[0m",
+            "\x1b[33m{api_id}\x1b[0m => \x1b[36m{:#?}\x1b[0m",
             client.inner.session().get()
         );
-        clients.insert_unique_unchecked(id, client);
+        clients.insert_unique_unchecked(api_id, client);
     }
     clients
 }

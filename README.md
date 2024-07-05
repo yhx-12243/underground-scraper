@@ -255,9 +255,21 @@ Then you should create a file named `telegram/config.json` (it can changed in co
 
 ```json
 {
-	"api_id_1": "api_hash_1",
-	"api_id_2": "api_hash_2",
-	"api_id_3": "api_hash_3",
+	"api_id_1": {
+		"hash": "api_hash_1"
+	},
+	"api_id_2": {
+		"hash": "api_hash_2",
+		"proxy": null
+	},
+	"api_id_3": {
+		"hash": "api_hash_3",
+		"proxy": "http://www.example.com/"
+	},
+	"api_id_4": {
+		"hash": "api_hash_4",
+		"proxy": "http://username:password@www.example.com/"
+	},
 	...
 }
 ```
