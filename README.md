@@ -268,7 +268,8 @@ Then you should create a file named `telegram/config.json` (it can changed in co
 	},
 	"api_id_4": {
 		"hash": "api_hash_4",
-		"proxy": "http://username:password@www.example.com/"
+		"proxy": "http://username:password@www.example.com/",
+		"session_file": 123456
 	},
 	...
 }

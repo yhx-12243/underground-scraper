@@ -1,0 +1,165 @@
+diff --git a/lib/grammers-client/src/types/iter_buffer.rs b/lib/grammers-client/src/types/iter_buffer.rs
+index 4b98461..6f088ec 100644
+--- a/lib/grammers-client/src/types/iter_buffer.rs
++++ b/lib/grammers-client/src/types/iter_buffer.rs
+@@ -59,7 +59,7 @@ impl<R, T> IterBuffer<R, T> {
+     ///
+     /// Data does not need to be fetched if the limit is reached or the buffer is empty and the
+     /// last chunk was reached.
+-    pub(crate) fn next_raw(&mut self) -> Option<Result<Option<T>, InvocationError>> {
++    pub fn next_raw(&mut self) -> Option<Result<Option<T>, InvocationError>> {
+         if self.limit_reached() || (self.buffer.is_empty() && self.last_chunk) {
+             Some(Ok(None))
+         } else {
+@@ -82,7 +82,7 @@ impl<R, T> IterBuffer<R, T> {
+     }
+ 
+     /// Pop a buffered item from the queue, and increment the amount of items fetched (returned).
+-    pub(crate) fn pop_item(&mut self) -> Option<T> {
++    pub fn pop_item(&mut self) -> Option<T> {
+         if let Some(item) = self.buffer.pop_front() {
+             self.fetched += 1;
+             Some(item)
+diff --git a/lib/grammers-client/src/types/message.rs b/lib/grammers-client/src/types/message.rs
+index 948f087..79f8495 100644
+--- a/lib/grammers-client/src/types/message.rs
++++ b/lib/grammers-client/src/types/message.rs
+@@ -173,6 +173,10 @@ impl Message {
+         }
+     }
+ 
++    pub fn into_inner(self) -> tl::types::Message {
++        self.raw
++    }
++
+     /// Whether the message is outgoing (i.e. you sent this message to some other chat) or
+     /// incoming (i.e. someone else sent it to you or the chat).
+     pub fn outgoing(&self) -> bool {
+diff --git a/lib/grammers-mtsender/Cargo.toml b/lib/grammers-mtsender/Cargo.toml
+index d6f1151..c107aca 100644
+--- a/lib/grammers-mtsender/Cargo.toml
++++ b/lib/grammers-mtsender/Cargo.toml
+@@ -17,6 +17,7 @@ edition = "2021"
+ proxy = ["tokio-socks", "trust-dns-resolver", "url"]
+ 
+ [dependencies]
++base64 = "0.22.1"
+ bytes = "1.5.0"
+ futures-util = { version = "0.3.15", default-features = false, features = [
+     "alloc"
+diff --git a/lib/grammers-mtsender/src/lib.rs b/lib/grammers-mtsender/src/lib.rs
+index 182598d..5e70309 100644
+--- a/lib/grammers-mtsender/src/lib.rs
++++ b/lib/grammers-mtsender/src/lib.rs
+@@ -98,6 +98,8 @@ pub enum NetStream {
+     Tcp(TcpStream),
+     #[cfg(feature = "proxy")]
+     ProxySocks5(Socks5Stream<TcpStream>),
++    #[cfg(feature = "proxy")]
++    ProxyHTTP(TcpStream),
+ }
+ 
+ impl NetStream {
+@@ -106,6 +108,8 @@ impl NetStream {
+             Self::Tcp(stream) => stream.split(),
+             #[cfg(feature = "proxy")]
+             Self::ProxySocks5(stream) => stream.split(),
++            #[cfg(feature = "proxy")]
++            Self::ProxyHTTP(stream) => stream.split(),
+         }
+     }
+ }
+@@ -834,21 +838,39 @@ async fn connect_proxy_stream(
+     };
+ 
+     match scheme {
+-        "socks5" => {
++        "socks5" => Ok(NetStream::ProxySocks5(
+             if username.is_empty() {
+-                Ok(NetStream::ProxySocks5(
+-                    tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
+-                        .await
+-                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+-                ))
++                tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr).await
++            } else {
++                tokio_socks::tcp::Socks5Stream::connect_with_password(
++                    socks_addr, addr, username, password,
++                )
++                .await
++            }
++            .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
++        )),
++        "http" => {
++            let mut socket = TcpStream::connect(socks_addr).await?;
++            let mut head = format!("CONNECT {addr} HTTP/1.1");
++            socket.write_all(head.as_bytes()).await?;
++            if !username.is_empty() {
++                use base64::Engine;
++
++                let auth = format!("{username}:{password}");
++                "\nProxy-Authorization: Basic ".clone_into(&mut head);
++                base64::prelude::BASE64_STANDARD.encode_string(auth, &mut head);
++                socket.write_all(head.as_bytes()).await?;
++            }
++            socket.write_all(b"\n\n").await?;
++
++            let mut buf = [0u8; 39];
++            socket.read_exact(&mut buf).await?;
++            if buf == *b"HTTP/1.1 200 Connection established\r\n\r\n" {
++                Ok(NetStream::ProxyHTTP(socket))
+             } else {
+-                Ok(NetStream::ProxySocks5(
+-                    tokio_socks::tcp::Socks5Stream::connect_with_password(
+-                        socks_addr, addr, username, password,
+-                    )
+-                    .await
+-                    .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+-                ))
++                "Response error: ".clone_into(&mut head);
++                head.push_str(&String::from_utf8_lossy(&buf));
++                Err(io::Error::new(ErrorKind::NotConnected, head))
+             }
+         }
+         scheme => Err(io::Error::new(
+diff --git a/lib/grammers-session/src/lib.rs b/lib/grammers-session/src/lib.rs
+index 2a2b1bd..80d0af7 100644
+--- a/lib/grammers-session/src/lib.rs
++++ b/lib/grammers-session/src/lib.rs
+@@ -16,8 +16,8 @@ pub use chat::{ChatHashCache, PackedChat, PackedType};
+ pub use generated::types::UpdateState;
+ pub use generated::types::User;
+ pub use generated::LAYER as VERSION;
+-use generated::{enums, types};
+-use grammers_tl_types::deserialize::Error as DeserializeError;
++pub use generated::{enums, types};
++pub use grammers_tl_types::deserialize::Error as DeserializeError;
+ pub use message_box::{channel_id, PrematureEndReason};
+ pub use message_box::{Gap, MessageBox};
+ use std::fmt;
+@@ -34,6 +34,14 @@ pub struct Session {
+     session: Mutex<types::Session>,
+ }
+ 
++impl From<types::Session> for Session {
++    fn from(session: types::Session) -> Self {
++        Self {
++            session: Mutex::new(session),
++        }
++    }
++}
++
+ #[allow(clippy::new_without_default)]
+ impl Session {
+     pub fn new() -> Self {
+@@ -148,6 +156,10 @@ impl Session {
+             .map(|enums::User::User(user)| user.clone())
+     }
+ 
++    pub fn get(&self) -> types::Session {
++        self.session.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
++    }
++
+     pub fn get_state(&self) -> Option<UpdateState> {
+         let session = self.session.lock().unwrap();
+         let enums::UpdateState::State(state) = session.state.clone()?;

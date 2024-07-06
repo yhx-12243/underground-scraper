@@ -1,22 +1,20 @@
+use compact_str::CompactString;
 use grammers_client::InvocationError;
 use grammers_mtsender::RpcError;
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 use parking_lot::Mutex;
-use tokio_postgres::{Client as DBClient, Statement};
+use tokio_postgres::Client as DBClient;
 
-use crate::telegram::{client::Client, Channel};
+use crate::{
+    db::DBWrapper,
+    telegram::{client::Client, Channel},
+};
 
 const SQL_INVITE: &str = "insert into telegram.invite (hash, channel_id, type) values ($1, $2, $3) on conflict (hash) do update set channel_id = excluded.channel_id";
 
-#[derive(Clone, Copy)]
-struct DBWrapper<'a> {
-    conn: &'a DBClient,
-    stmt_invite: &'a Statement,
-}
-
 pub async fn work<'a, I>(
-    keys: Vec<String>,
+    keys: Vec<CompactString>,
     clients: I,
     conn: &mut DBClient,
 ) -> impl Iterator<Item = Channel>
@@ -27,7 +25,7 @@ where
     let stmt = conn.prepare_static(SQL_INVITE.into()).await.unwrap();
     let db = DBWrapper {
         conn,
-        stmt_invite: &stmt,
+        stmts: [&stmt],
     };
     let futs = clients.map(|(id, client)| into_future(*id, client, &keys, db));
     let folded = futures_util::future::join_all(futs).await;
@@ -37,7 +35,7 @@ where
 async fn access_channel(
     client: &Client,
     name: &str,
-    db: DBWrapper<'_>,
+    db: DBWrapper<'_, 1>,
     target: &str,
 ) -> anyhow::Result<Channel> {
     use grammers_client::types::Chat::{Group, User};
@@ -45,7 +43,7 @@ async fn access_channel(
     log::info!(target: target, "======== \x1b[32mACCESSING CHANNEL \x1b[36m{name}\x1b[0m ========");
     let chat = match client.inner.resolve_username(name).await {
         Ok(Some(User(user))) => {
-            db.conn.execute(db.stmt_invite, &[&name, &user.id(), &(b'U'.cast_signed())]).await?;
+            db.conn.execute(db.stmts[0], &[&name, &user.id(), &(b'U'.cast_signed())]).await?;
             anyhow::bail!("{name} is a user");
         }
         Ok(Some(c)) => c,
@@ -65,7 +63,7 @@ async fn access_channel(
 
     db.conn
         .execute(
-            db.stmt_invite,
+            db.stmts[0],
             &[
                 &name,
                 &id,
@@ -85,7 +83,7 @@ async fn access_channel(
 async fn access_invite(
     client: &Client,
     name: &str,
-    db: DBWrapper<'_>,
+    db: DBWrapper<'_, 1>,
     target: &str,
 ) -> anyhow::Result<Channel> {
     use tl::{
@@ -125,7 +123,7 @@ async fn access_invite(
             username,
             ..
         }) => {
-            db.conn.execute(db.stmt_invite, &[&name, &id, &(b'C'.cast_signed())]).await?;
+            db.conn.execute(db.stmts[0], &[&name, &id, &(b'C'.cast_signed())]).await?;
 
             Ok(Channel {
                 id,
@@ -135,7 +133,7 @@ async fn access_invite(
             })
         }
         Chat::Chat(tl::types::Chat { id, title, .. }) => {
-            db.conn.execute(db.stmt_invite, &[&name, &id, &(b'G'.cast_signed())]).await?;
+            db.conn.execute(db.stmts[0], &[&name, &id, &(b'G'.cast_signed())]).await?;
 
             Ok(Channel {
                 id,
@@ -151,8 +149,8 @@ async fn access_invite(
 async fn into_future(
     id: i32,
     client: &Client,
-    keys: &Mutex<Vec<String>>,
-    db: DBWrapper<'_>,
+    keys: &Mutex<Vec<CompactString>>,
+    db: DBWrapper<'_, 1>,
 ) -> Vec<Channel> {
     let mut channels = Vec::new();
     let target_access_channel = format!("telegram-access-channel({id})");

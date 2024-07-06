@@ -1,8 +1,8 @@
-use core::pin::pin;
 use std::{
     cell::RefCell,
     fs::File,
     io::{BufWriter, Write},
+    pin::pin,
 };
 
 use compact_str::CompactString;
@@ -13,7 +13,7 @@ use hashbrown::{
 };
 use tokio_postgres::{types::ToSql, Client};
 use uscr::{
-    db::{get_connection, BB8Error, DBResult, ToSqlIter},
+    db::{get_connection, DBResult, ToSqlIter},
     util::xmax_to_success,
 };
 
@@ -143,13 +143,12 @@ impl Inspector {
         Ok(())
     }
 
-    pub async fn extract_content(&mut self) -> Result<(), uscr::db::BB8Error> {
+    pub async fn extract_content(&mut self, conn: &mut Client) -> Result<(), uscr::db::BB8Error> {
         const SQL: &str = "select channel_id, message_id, data->>'message' from telegram.message where data->>'message' like '%t%'";
 
-        let mut conn = get_connection().await?;
-        let mut conn2 = get_connection().await?;
-        let stmt = conn.prepare_static(SQL.into()).await?;
-        let stream = conn.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
+        let mut conn_bg = get_connection().await?;
+        let stmt = conn_bg.prepare_static(SQL.into()).await?;
+        let stream = conn_bg.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
         let mut stream = pin!(stream);
 
         let mut cnt = 0;
@@ -162,20 +161,19 @@ impl Inspector {
             }
             cnt += 1;
             if cnt % 65536 == 0 {
-                self.commit(&self.es, &mut conn2).await?;
+                self.commit(&self.es, conn).await?;
                 self.es.clear();
             }
         }
 
-        self.commit(&self.es, &mut conn2).await.map_err(Into::into)
+        self.commit(&self.es, conn).await.map_err(Into::into)
     }
 }
 
-pub async fn generate_user_id_map() -> Result<HashMap<CompactString, i64>, BB8Error> {
+pub async fn generate_user_id_map(conn: &mut Client) -> DBResult<HashMap<CompactString, i64>> {
     const SQL1: &str = "select channel_id, hash from telegram.invite";
     const SQL2: &str = "select id, name from telegram.channel";
 
-    let mut conn = get_connection().await?;
     let stmt = conn.prepare_static(SQL1.into()).await?;
     let rows = conn.query(&stmt, &[]).await?;
     let iter1 = rows.into_iter();

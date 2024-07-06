@@ -14,16 +14,17 @@ use grammers_client::client::bots::InvocationError;
 use grammers_mtsender::RpcError;
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
-use hashbrown::HashMap;
 use tokio_postgres::types::Json;
 use uscr::{
-    db::{get_connection, BB8Error, DBResult, PooledConnection, ToSqlIter},
+    db::{DBResult, ToSqlIter},
     util::xmax_to_success,
 };
 
 use types::Message;
 
-pub fn parse_config(file: &Path) -> io::Result<HashMap<i32, InitConfig>> {
+use crate::db::DBWrapper;
+
+pub fn parse_config(file: &Path) -> io::Result<Vec<InitConfig>> {
     let file = File::open(file)?;
     let reader = BufReader::new(file);
     serde_json::from_reader(reader).map_err(io::Error::other)
@@ -84,22 +85,21 @@ async fn insert_to_db(
     channel_id: i64,
     interval: &mut Option<(i32, i32)>,
     target: &str,
+    db: DBWrapper<'_, 3>,
 ) -> Option<i32> {
     async fn insert_to_db_inner(
         messages: &[(i32, Message)],
         channel_id: i64,
-    ) -> Result<(usize, usize, i32, i32, PooledConnection), BB8Error> {
-        const SQL: &str = "with tmp_insert(m, d) as (select * from unnest($1::integer[], $3::jsonb[])) insert into telegram.message (id, message_id, channel_id, data) select ($2::bigint << 32) | m, m, $2, d from tmp_insert on conflict (id) do update set message_id = excluded.message_id, channel_id = excluded.channel_id, data = excluded.data returning xmax";
-
+        db: DBWrapper<'_, 3>,
+    ) -> DBResult<(usize, usize, i32, i32)> {
         let len = messages.len();
         let min = messages.iter().fold(i32::MAX, |x, y| x.min(y.0));
         let max = messages.iter().fold(i32::MIN, |x, y| x.max(y.0));
 
-        let mut conn = get_connection().await?;
-        let stmt = conn.prepare_static(SQL.into()).await?;
-        let rows = conn
+        let rows = db
+            .conn
             .query(
-                &stmt,
+                db.stmts[1],
                 &[
                     &ToSqlIter(messages.iter().map(|x| x.0)),
                     &channel_id,
@@ -108,15 +108,15 @@ async fn insert_to_db(
             )
             .await?;
 
-        Ok((xmax_to_success(rows.iter()), len, min, max, conn))
+        Ok((xmax_to_success(rows.iter()), len, min, max))
     }
 
     if messages.is_empty() {
         log::warn!(target: target, "empty batch");
         None
     } else {
-        match insert_to_db_inner(messages, channel_id).await {
-            Ok((succ, len, min, max, mut conn)) => {
+        match insert_to_db_inner(messages, channel_id, db).await {
+            Ok((succ, len, min, max)) => {
                 log::info!(target: target, "{succ}/{len} data upserted, id range: [{min}, {max}]");
                 let inner = match interval {
                     Some(inner) => {
@@ -126,12 +126,7 @@ async fn insert_to_db(
                     }
                     None => interval.insert((min, max)),
                 };
-                let e: DBResult<()> = try {
-                    const SQL: &str = "update telegram.channel set min_message_id = $1, max_message_id = $2, last_fetch = now() at time zone 'UTC' where id = $3";
-                    let stmt = conn.prepare_static(SQL.into()).await?;
-                    conn.execute(&stmt, &[&inner.0, &inner.1, &channel_id]).await?;
-                };
-                if let Err(e) = e {
+                if let Err(e) = db.conn.execute(db.stmts[2], &[&inner.0, &inner.1, &channel_id]).await {
                     log::error!(target: target, "{e:#?}");
                 }
                 Some(max)
@@ -144,7 +139,13 @@ async fn insert_to_db(
     }
 }
 
-pub async fn fetch_content(client: &Client, channel: &Channel, limit: u32, target: &str) {
+pub async fn fetch_content(
+    client: &Client,
+    channel: &Channel,
+    limit: u32,
+    target: &str,
+    db: DBWrapper<'_, 3>,
+) {
     log::info!(target: target, "======== \x1b[32mFETCHING CONTENT \x1b[36m{}\x1b[0m ========", channel.id);
 
     let packed = PackedChat {
@@ -155,13 +156,7 @@ pub async fn fetch_content(client: &Client, channel: &Channel, limit: u32, targe
 
     // compute stop line
     let interval_origin: Option<(i32, i32)> = try {
-        const SQL: &str =
-            "select min_message_id, max_message_id from telegram.channel where id = $1";
-
-        let mut conn = get_connection().await.ok()?;
-        let stmt = conn.prepare_static(SQL.into()).await.ok()?;
-        let row = conn.query_one(&stmt, &[&channel.id]).await.ok()?;
-
+        let row = db.conn.query_one(db.stmts[0], &[&channel.id]).await.ok()?;
         let min: i32 = row.try_get(0).ok()?;
         let max: i32 = row.try_get(1).ok()?;
 
@@ -184,7 +179,7 @@ pub async fn fetch_content(client: &Client, channel: &Channel, limit: u32, targe
                 #[rustfmt::skip]
                 if !buffer.is_empty() {
                     let sleep = tokio::time::sleep(const { core::time::Duration::from_millis(180) });
-                    let db_fut = insert_to_db(&buffer, channel.id, &mut interval, target);
+                    let db_fut = insert_to_db(&buffer, channel.id, &mut interval, target, db);
                     let batch_max: Option<i32> = join!(sleep, db_fut).await.1;
                     if let Some((_, r)) = interval && r.cast_unsigned() > limit {
                         stop_point = stop_point.max(r.wrapping_sub_unsigned(limit));
@@ -202,7 +197,7 @@ pub async fn fetch_content(client: &Client, channel: &Channel, limit: u32, targe
                     code: 400, name, ..
                 })) => {
                     log::error!(target: target, "channel error: {name}");
-                    insert_to_db(&buffer, channel.id, &mut interval, target).await;
+                    insert_to_db(&buffer, channel.id, &mut interval, target, db).await;
                     break 'outer;
                 }
                 Err(e) => {
@@ -212,7 +207,7 @@ pub async fn fetch_content(client: &Client, channel: &Channel, limit: u32, targe
             };
         };
         let Some(message) = item else {
-            insert_to_db(&buffer, channel.id, &mut interval, target).await;
+            insert_to_db(&buffer, channel.id, &mut interval, target, db).await;
             break;
         };
         let message = Message::from(message.into_inner());

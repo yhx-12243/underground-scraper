@@ -11,14 +11,12 @@
     yeet_expr,
 )]
 
+mod db;
 mod extract;
 mod ping;
 mod telegram;
 
-async fn insert_channels<C>(
-    channels: C,
-    conn: &mut tokio_postgres::Client,
-) -> Result<(), uscr::db::BB8Error>
+async fn insert_channels<C>(channels: C, conn: &mut tokio_postgres::Client) -> uscr::db::DBResult<()>
 where
     C: Iterator<Item = telegram::Channel>,
 {
@@ -54,13 +52,9 @@ where
     Ok(())
 }
 
-async fn get_all_channels_from_db() -> Result<Vec<telegram::Channel>, uscr::db::BB8Error> {
-    use uscr::db::get_connection;
+async fn get_all_channels_from_db(conn: &mut tokio_postgres::Client) -> uscr::db::DBResult<Vec<telegram::Channel>> {
+    const SQL: &str = "select id, name, access_hash, app_id from telegram.channel order by last_fetch";
 
-    const SQL: &str =
-        "select id, name, access_hash, app_id from telegram.channel order by last_fetch";
-
-    let mut conn = get_connection().await?;
     let stmt = conn.prepare_static(SQL.into()).await?;
     let rows = conn.query(&stmt, &[]).await?;
 
@@ -147,40 +141,52 @@ async fn main() -> anyhow::Result<()> {
     )
     .await;
 
-    match args.command {
-        Commands::Ping {
-            channels: raw_channels,
-        } => {
-            use unicase::UniCase;
-            use uscr::db::get_connection;
+    let mut conn = uscr::db::get_connection().await?;
 
-            let mut conn = get_connection().await?;
-            let stmt = {
-                const SQL: &str = "select from telegram.invite where hash = $1 union select from telegram.channel where name = $1";
-                conn.prepare_static(SQL.into()).await?
+    match args.command {
+        Commands::Ping { channels: raw_channels } => {
+            use compact_str::CompactString;
+            use unicase::UniCase;
+
+            let estimate_n = raw_channels.len();
+
+            let searched = {
+                use core::pin::pin;
+                use futures_util::TryStreamExt;
+                use tokio_postgres::types::ToSql;
+
+                const SQL: &str = "select hash from telegram.invite union all select name from telegram.channel";
+                let stmt = conn.prepare_static(SQL.into()).await?;
+                let stream = conn.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
+                let mut stream = pin!(stream);
+                let mut result = HashSet::new();
+                while let Some(row) = stream.try_next().await? {
+                    let s = row.try_get::<_, &str>(0)?;
+                    result.insert(CompactString::new(s));
+                }
+                result
             };
 
-            let mut channels = HashMap::with_capacity(raw_channels.len());
-
-            let mut ids = HashSet::with_capacity(raw_channels.len());
-            let mut name_or_hashes = HashSet::with_capacity(raw_channels.len());
+            let mut ids = HashSet::with_capacity(estimate_n);
+            let mut name_or_hashes = HashSet::with_capacity(estimate_n);
 
             for raw_channel in raw_channels {
                 if let Ok(id) = raw_channel.parse() {
                     ids.insert(id);
-                } else if conn.query_opt(&stmt, &[&raw_channel]).await?.is_none() {
-                    name_or_hashes.insert(UniCase::new(raw_channel));
+                } else if !searched.contains(&*raw_channel) {
+                    name_or_hashes.insert(UniCase::new(CompactString::from(raw_channel)));
                 }
             }
 
+            let mut channels = HashMap::with_capacity(estimate_n);
+
             if !ids.is_empty() {
                 if let Some((app_id, client)) = clients.iter().next() {
-                    for mut channel in
-                        telegram::fetch_channels_by_id(client, ids.into_iter()).await?
-                    {
+                    for mut channel in telegram::fetch_channels_by_id(client, ids.into_iter()).await? {
                         channel.app_id = *app_id;
-                        let t = UniCase::new((*channel.name).to_owned());
+                        let t = UniCase::new(channel.name);
                         name_or_hashes.remove(&t);
+                        channel.name = t.into_inner();
                         channels.insert(channel.id, channel);
                     }
                 } else {
@@ -206,11 +212,8 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("{channels:#?}");
             insert_channels(channels.into_values(), &mut conn).await?;
         }
-        Commands::Content {
-            channels: channels_filt,
-            limit,
-        } => {
-            let mut channels = get_all_channels_from_db().await?;
+        Commands::Content { channels: channels_filt, limit } => {
+            let mut channels = get_all_channels_from_db(&mut conn).await?;
             if !channels_filt.is_empty() {
                 let filt = channels_filt.into_iter().collect::<HashSet<i64>>();
                 channels.retain(|channel| filt.contains(&channel.id));
@@ -226,20 +229,34 @@ async fn main() -> anyhow::Result<()> {
                     tracing::warn!(target: "telegram-before-fetch", "app_id {} not found", channel.app_id);
                 }
             }
+
+            let stmt_get_range;
+            let stmt_insert_msg;
+            let stmt_upd_minmax;
+            let db = {
+                stmt_get_range = conn.prepare_static("select min_message_id, max_message_id from telegram.channel where id = $1".into()).await?;
+                stmt_insert_msg = conn.prepare_static("with tmp_insert(m, d) as (select * from unnest($1::integer[], $3::jsonb[])) insert into telegram.message (id, message_id, channel_id, data) select ($2::bigint << 32) | m, m, $2, d from tmp_insert on conflict (id) do update set message_id = excluded.message_id, channel_id = excluded.channel_id, data = excluded.data returning xmax".into()).await?;
+                stmt_upd_minmax = conn.prepare_static("update telegram.channel set min_message_id = $1, max_message_id = $2, last_fetch = now() at time zone 'UTC' where id = $3".into()).await?;
+
+                db::DBWrapper {
+                    conn: &conn,
+                    stmts: [&stmt_get_range, &stmt_insert_msg, &stmt_upd_minmax],
+                }
+            };
             let futs = clients.iter().filter_map(|(id, client)| {
                 let channels = channels_by_id.remove(id)?;
                 let id = *id;
                 Some(async move {
                     let target = format!("telegram-fetch-message({id})");
                     for channel in channels {
-                        telegram::fetch_content(client, &channel, limit, &target).await;
+                        telegram::fetch_content(client, &channel, limit, &target, db).await;
                     }
                 })
             });
             futures_util::future::join_all(futs).await;
         }
         Commands::Extract { save } => {
-            let map = extract::generate_user_id_map().await?;
+            let map = extract::generate_user_id_map(&mut conn).await?;
 
             let mut inspector = extract::Inspector::new(
                 map,
@@ -248,7 +265,7 @@ async fn main() -> anyhow::Result<()> {
                     .append(true)
                     .open(save)?,
             );
-            inspector.extract_content().await?;
+            inspector.extract_content(&mut conn).await?;
         }
     }
 
