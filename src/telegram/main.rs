@@ -108,7 +108,7 @@ struct Args {
 enum Commands {
     Ping {
         #[arg(short, long, num_args=1.., required=true)]
-        channels: Vec<String>,
+        channels: Vec<compact_str::CompactString>,
     },
     Content {
         #[arg(short, long, num_args=1.., value_parser=clap::value_parser!(i64).range(0..))]
@@ -145,7 +145,6 @@ async fn main() -> anyhow::Result<()> {
 
     match args.command {
         Commands::Ping { channels: raw_channels } => {
-            use compact_str::CompactString;
             use unicase::UniCase;
 
             let estimate_n = raw_channels.len();
@@ -162,7 +161,7 @@ async fn main() -> anyhow::Result<()> {
                 let mut result = HashSet::new();
                 while let Some(row) = stream.try_next().await? {
                     let s = row.try_get::<_, &str>(0)?;
-                    result.insert(CompactString::new(s));
+                    result.insert(compact_str::CompactString::new(s));
                 }
                 result
             };
@@ -173,8 +172,8 @@ async fn main() -> anyhow::Result<()> {
             for raw_channel in raw_channels {
                 if let Ok(id) = raw_channel.parse() {
                     ids.insert(id);
-                } else if !searched.contains(&*raw_channel) {
-                    name_or_hashes.insert(UniCase::new(CompactString::from(raw_channel)));
+                } else if !searched.contains(&raw_channel) {
+                    name_or_hashes.insert(UniCase::new(raw_channel));
                 }
             }
 

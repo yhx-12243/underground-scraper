@@ -10,7 +10,7 @@ mod parse_item;
 #[derive(clap::Parser)]
 struct Args {
     #[arg(short, long, default_value = "ezkify")]
-    key: String,
+    key: compact_str::CompactString,
     #[arg(short, long)]
     url: Option<String>,
 }

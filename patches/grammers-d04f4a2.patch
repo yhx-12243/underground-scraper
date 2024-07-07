@@ -48,7 +48,7 @@ index d6f1151..c107aca 100644
  futures-util = { version = "0.3.15", default-features = false, features = [
      "alloc"
 diff --git a/lib/grammers-mtsender/src/lib.rs b/lib/grammers-mtsender/src/lib.rs
-index 182598d..5e70309 100644
+index 182598d..0bfb4ed 100644
 --- a/lib/grammers-mtsender/src/lib.rs
 +++ b/lib/grammers-mtsender/src/lib.rs
 @@ -98,6 +98,8 @@ pub enum NetStream {
@@ -69,7 +69,7 @@ index 182598d..5e70309 100644
          }
      }
  }
-@@ -834,21 +838,39 @@ async fn connect_proxy_stream(
+@@ -834,21 +838,38 @@ async fn connect_proxy_stream(
      };
  
      match scheme {
@@ -92,17 +92,16 @@ index 182598d..5e70309 100644
 +        )),
 +        "http" => {
 +            let mut socket = TcpStream::connect(socks_addr).await?;
-+            let mut head = format!("CONNECT {addr} HTTP/1.1");
-+            socket.write_all(head.as_bytes()).await?;
++            let mut head = format!("CONNECT {addr} HTTP/1.1\r\n\r\n");
 +            if !username.is_empty() {
 +                use base64::Engine;
 +
-+                let auth = format!("{username}:{password}");
-+                "\nProxy-Authorization: Basic ".clone_into(&mut head);
-+                base64::prelude::BASE64_STANDARD.encode_string(auth, &mut head);
-+                socket.write_all(head.as_bytes()).await?;
++                unsafe { head.as_mut_vec().set_len(head.len() - 2); }
++                head.push_str("Proxy-Authorization: Basic ");
++                base64::prelude::BASE64_STANDARD.encode_string(format!("{username}:{password}"), &mut head);
++                head.push_str("\r\n\r\n");
 +            }
-+            socket.write_all(b"\n\n").await?;
++            socket.write_all(head.as_bytes()).await?;
 +
 +            let mut buf = [0u8; 39];
 +            socket.read_exact(&mut buf).await?;
