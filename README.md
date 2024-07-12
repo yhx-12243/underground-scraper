@@ -312,7 +312,8 @@ CREATE TABLE telegram.invite (
     hash text NOT NULL,
     channel_id bigint NOT NULL,
     type "char" NOT NULL,
-    PRIMARY LEY (hash)
+    description text NOT NULL,
+    PRIMARY KEY (hash)
 );
 
 CREATE INDEX ON telegram.channel (lower(name));

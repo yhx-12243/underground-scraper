@@ -109,6 +109,8 @@ enum Commands {
     Ping {
         #[arg(short, long, num_args=1.., required=true)]
         channels: Vec<compact_str::CompactString>,
+        #[arg(short, long)]
+        force: bool,
     },
     Content {
         #[arg(short, long, num_args=1.., value_parser=clap::value_parser!(i64).range(0..))]
@@ -144,12 +146,14 @@ async fn main() -> anyhow::Result<()> {
     let mut conn = uscr::db::get_connection().await?;
 
     match args.command {
-        Commands::Ping { channels: raw_channels } => {
+        Commands::Ping { channels: raw_channels, force } => {
             use unicase::UniCase;
 
             let estimate_n = raw_channels.len();
 
-            let searched = {
+            let searched = if force {
+                HashSet::default()
+            } else {
                 use core::pin::pin;
                 use futures_util::TryStreamExt;
                 use tokio_postgres::types::ToSql;
@@ -219,7 +223,7 @@ async fn main() -> anyhow::Result<()> {
             }
             let mut channels_by_id = HashMap::with_capacity(clients.len());
             for channel in channels {
-                if clients.get(&channel.app_id).is_some() {
+                if clients.contains_key(&channel.app_id) {
                     channels_by_id
                         .entry(channel.app_id)
                         .or_insert_with(Vec::new)

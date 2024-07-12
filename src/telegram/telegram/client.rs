@@ -48,11 +48,15 @@ impl Client {
         }
     }
 
-    pub async fn login(&self) -> io::Result<()> {
+    pub async fn login(&self, hid: i32) -> io::Result<()> {
         let mut phone = String::with_capacity(32);
         while !self.inner.is_authorized().await.map_err(io::Error::other)? {
             if phone.is_empty() {
-                stdout().write_all(b"Please enter your phone: ")?;
+                {
+                    let mut stdout = stdout().lock();
+                    write!(stdout, "[{hid}] Please enter your phone: ")?;
+                    stdout.flush()?;
+                }
                 stdin().read_line(&mut phone)?;
             }
             let token = self
@@ -62,16 +66,24 @@ impl Client {
                 .map_err(io::Error::other)?;
 
             let mut code = String::with_capacity(32);
-            stdout().write_all(b"Please enter the code you received: ")?;
+            {
+                let mut stdout = stdout().lock();
+                write!(stdout, "[{hid}] Please enter the code you received: ")?;
+                stdout.flush()?;
+            }
             stdin().read_line(&mut code)?;
             match self.inner.sign_in(&token, code.trim()).await {
                 Ok(_) => (),
                 Err(SignInError::PasswordRequired(password_token)) => {
-                    if let Some(hint) = password_token.hint() {
-                        write!(stdout(), "Please enter your password (hint: {hint}): ")
-                    } else {
-                        stdout().write_all(b"Please enter your password: ")
-                    }?;
+                    {
+                        let mut stdout = stdout().lock();
+                        if let Some(hint) = password_token.hint() {
+                            write!(stdout, "[{hid}] Please enter your password (hint: {hint}): ")
+                        } else {
+                            write!(stdout, "[{hid}] Please enter your password: ")
+                        }?;
+                        stdout.flush()?;
+                    }
                     let mut password = String::with_capacity(32);
                     {
                         let mut stdin = stdin().lock();
@@ -133,7 +145,8 @@ pub async fn init_clients_from_map(
                 continue;
             }
         };
-        if let Err(e) = client.login().await {
+        let session_file = init_config.session_file.unwrap_or(api_id);
+        if let Err(e) = client.login(session_file).await {
             tracing::error!(target: "client-setup(login)", api_id, ?e);
             continue;
         }
@@ -141,7 +154,6 @@ pub async fn init_clients_from_map(
             tracing::error!(target: "client-setup(save)", api_id, ?e);
             continue;
         }
-        let session_file = init_config.session_file.unwrap_or(api_id);
         match clients.try_insert(session_file, client) {
             Ok(client) => tracing::info!(target: "client-setup(insert)",
                 "\x1b[33m{api_id}\x1b[0m (key: \x1b[32m{session_file}\x1b[0m) => \x1b[36m{:?}\x1b[0m",

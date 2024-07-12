@@ -51,14 +51,7 @@ where
     };
 
     let request = tl::functions::channels::GetChannels {
-        id: channels
-            .map(|channel_id| {
-                Ch(InputChannel {
-                    channel_id,
-                    access_hash: 0,
-                })
-            })
-            .collect(),
+        id: channels.map(|channel_id| Ch(InputChannel { channel_id, access_hash: 0 })).collect(),
     };
 
     let (Chats::Chats(messages::Chats { chats }) | Chats::Slice(messages::ChatsSlice { chats, .. })) = client.inner.invoke(&request).await?;
@@ -157,8 +150,8 @@ pub async fn fetch_content(
     // compute stop line
     let interval_origin: Option<(i32, i32)> = try {
         let row = db.conn.query_one(db.stmts[0], &[&channel.id]).await.ok()?;
-        let min: i32 = row.try_get(0).ok()?;
-        let max: i32 = row.try_get(1).ok()?;
+        let min = row.try_get(0).ok()?;
+        let max = row.try_get(1).ok()?;
 
         if min == 0 && max == 0 {
             do yeet;
@@ -172,6 +165,7 @@ pub async fn fetch_content(
     let mut iter = client.inner.iter_messages(packed);
     let mut buffer = Vec::with_capacity(100);
     'outer: loop {
+        let mut n_err = 0;
         let item = loop {
             let item = if let Some(raw) = iter.next_raw() {
                 raw
@@ -193,15 +187,19 @@ pub async fn fetch_content(
             };
             match item {
                 Ok(item) => break item,
-                Err(InvocationError::Rpc(RpcError {
-                    code: 400, name, ..
-                })) => {
-                    log::error!(target: target, "channel error: {name}");
+                Err(InvocationError::Rpc(RpcError { code: 400, name, caused_by, value })) => {
+                    log::error!(target: target, "channel error: {name} caused by \x1b[33m{caused_by:?}\x1b[0m, with value \x1b[33m{value:?}\x1b[0m");
                     insert_to_db(&buffer, channel.id, &mut interval, target, db).await;
                     break 'outer;
                 }
                 Err(e) => {
                     log::error!(target: target, "{e:#?}");
+                    n_err += 1;
+                    if n_err == 5 {
+                        log::error!(target: target, "channel error too many times: {e:#?}, breaking");
+                        insert_to_db(&buffer, channel.id, &mut interval, target, db).await;
+                        break 'outer;
+                    }
                     tokio::time::sleep(const { core::time::Duration::from_secs(1) }).await;
                 }
             };
@@ -210,7 +208,7 @@ pub async fn fetch_content(
             insert_to_db(&buffer, channel.id, &mut interval, target, db).await;
             break;
         };
-        let message = Message::from(message.into_inner());
+        let message = Message::from(message.raw);
 
         buffer.push((message.id, message));
     }

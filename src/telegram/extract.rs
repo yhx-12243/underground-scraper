@@ -90,7 +90,7 @@ impl Inspector {
 
             match self.dict.entry(result) {
                 Entry::Occupied(e) => result = e.into_key().unwrap(),
-                Entry::Vacant(e) => {
+                Entry::Vacant(e) => #[allow(clippy::assigning_clones)] {
                     let prefix =
                         // SAFETY: the position of suffix is UTF-8 boundary.
                         unsafe { text.get_unchecked(idx..suffix.as_ptr().sub_ptr(text.as_ptr())) };

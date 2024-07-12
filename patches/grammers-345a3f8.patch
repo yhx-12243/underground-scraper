@@ -20,21 +20,6 @@ index 4b98461..6f088ec 100644
          if let Some(item) = self.buffer.pop_front() {
              self.fetched += 1;
              Some(item)
-diff --git a/lib/grammers-client/src/types/message.rs b/lib/grammers-client/src/types/message.rs
-index 948f087..79f8495 100644
---- a/lib/grammers-client/src/types/message.rs
-+++ b/lib/grammers-client/src/types/message.rs
-@@ -173,6 +173,10 @@ impl Message {
-         }
-     }
- 
-+    pub fn into_inner(self) -> tl::types::Message {
-+        self.raw
-+    }
-+
-     /// Whether the message is outgoing (i.e. you sent this message to some other chat) or
-     /// incoming (i.e. someone else sent it to you or the chat).
-     pub fn outgoing(&self) -> bool {
 diff --git a/lib/grammers-mtsender/Cargo.toml b/lib/grammers-mtsender/Cargo.toml
 index d6f1151..c107aca 100644
 --- a/lib/grammers-mtsender/Cargo.toml
@@ -48,7 +33,7 @@ index d6f1151..c107aca 100644
  futures-util = { version = "0.3.15", default-features = false, features = [
      "alloc"
 diff --git a/lib/grammers-mtsender/src/lib.rs b/lib/grammers-mtsender/src/lib.rs
-index 182598d..0bfb4ed 100644
+index c899a46..9bcff03 100644
 --- a/lib/grammers-mtsender/src/lib.rs
 +++ b/lib/grammers-mtsender/src/lib.rs
 @@ -98,6 +98,8 @@ pub enum NetStream {
@@ -69,7 +54,7 @@ index 182598d..0bfb4ed 100644
          }
      }
  }
-@@ -834,21 +838,38 @@ async fn connect_proxy_stream(
+@@ -834,21 +838,36 @@ async fn connect_proxy_stream(
      };
  
      match scheme {
@@ -83,10 +68,7 @@ index 182598d..0bfb4ed 100644
 -                ))
 +                tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr).await
 +            } else {
-+                tokio_socks::tcp::Socks5Stream::connect_with_password(
-+                    socks_addr, addr, username, password,
-+                )
-+                .await
++                tokio_socks::tcp::Socks5Stream::connect_with_password(socks_addr, addr, username, password).await
 +            }
 +            .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
 +        )),
@@ -96,7 +78,8 @@ index 182598d..0bfb4ed 100644
 +            if !username.is_empty() {
 +                use base64::Engine;
 +
-+                unsafe { head.as_mut_vec().set_len(head.len() - 2); }
++                let n = head.len() - 2;
++                unsafe { head.as_mut_vec().set_len(n); }
 +                head.push_str("Proxy-Authorization: Basic ");
 +                base64::prelude::BASE64_STANDARD.encode_string(format!("{username}:{password}"), &mut head);
 +                head.push_str("\r\n\r\n");
