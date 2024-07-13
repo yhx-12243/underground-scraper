@@ -30,7 +30,7 @@ impl Client {
         api_hash: String,
         proxy_url: Option<String>,
         flood_sleep_threshold: u32,
-    ) -> io::Result<Self> {
+    ) -> io::Result<(Self, bool)> {
         let config = Config {
             session: Session::load_file_or_create(&session_path)?,
             api_id,
@@ -42,10 +42,10 @@ impl Client {
             },
         };
 
-        match ClientInner::connect(config).await {
-            Ok(inner) => Ok(Self { inner, session_path }),
-            Err(err) => Err(io::Error::other(err)),
-        }
+        let inner = ClientInner::connect(config).await.map_err(io::Error::other)?;
+        let is_authorized = inner.is_authorized().await.map_err(io::Error::other)?;
+
+        Ok((Self { inner, session_path }, is_authorized))
     }
 
     pub async fn login(&self, hid: i32) -> io::Result<()> {
@@ -138,7 +138,7 @@ pub async fn init_clients_from_map(
 
     for (init_config, try_client) in configs.into_iter().zip(client_resolve) {
         let api_id = init_config.id;
-        let client = match try_client {
+        let (client, is_authorized) = match try_client {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!(target: "client-setup(get_client)", api_id, ?e);
@@ -146,9 +146,11 @@ pub async fn init_clients_from_map(
             }
         };
         let session_file = init_config.session_file.unwrap_or(api_id);
-        if let Err(e) = client.login(session_file).await {
-            tracing::error!(target: "client-setup(login)", api_id, ?e);
-            continue;
+        if !is_authorized {
+            if let Err(e) = client.login(session_file).await {
+                tracing::error!(target: "client-setup(login)", api_id, ?e);
+                continue;
+            }
         }
         if let Err(e) = client.save() {
             tracing::error!(target: "client-setup(save)", api_id, ?e);

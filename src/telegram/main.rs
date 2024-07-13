@@ -165,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
                 let mut result = HashSet::new();
                 while let Some(row) = stream.try_next().await? {
                     let s = row.try_get::<_, &str>(0)?;
-                    result.insert(compact_str::CompactString::new(s));
+                    result.insert(UniCase::new(compact_str::CompactString::new(s)));
                 }
                 result
             };
@@ -176,8 +176,11 @@ async fn main() -> anyhow::Result<()> {
             for raw_channel in raw_channels {
                 if let Ok(id) = raw_channel.parse() {
                     ids.insert(id);
-                } else if !searched.contains(&raw_channel) {
-                    name_or_hashes.insert(UniCase::new(raw_channel));
+                } else {
+                    let raw_channel = UniCase::new(raw_channel);
+                    if !searched.contains(&raw_channel) {
+                        name_or_hashes.insert(raw_channel);
+                    }
                 }
             }
 

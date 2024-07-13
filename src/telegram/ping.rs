@@ -37,7 +37,7 @@ async fn get_description(
     ty: PackedType,
     id: i64,
     access_hash: i64,
-    target: &str
+    target: &str,
 ) -> String {
     if ty == PackedType::User || ty == PackedType::Bot {
         use tl::enums::users::UserFull::Full;
@@ -91,7 +91,6 @@ async fn access_channel(
     target: &str,
 ) -> anyhow::Result<Channel> {
     use grammers_client::types::Chat::{Channel as Chan, Group, User};
-
 
     log::info!(target: target, "======== \x1b[32mACCESSING CHANNEL \x1b[36m{name}\x1b[0m ========");
     let chat = match client.inner.resolve_username(name).await {

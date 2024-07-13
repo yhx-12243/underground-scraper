@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
                 let tabs_guard = browser
                     .get_tabs()
                     .lock()
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let (first, remains) = tabs_guard
                     .split_first()
                     .ok_or_else(|| anyhow::anyhow!("no tabs found"))?;
