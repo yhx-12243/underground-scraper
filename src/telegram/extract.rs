@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     fs::File,
     io::{BufWriter, Write},
     pin::pin,
@@ -31,7 +30,7 @@ pub struct Inspector {
     es: Vec<(i64, i32, CompactString)>,
     map: HashMap<CompactString, i64>,
 
-    saver: RefCell<Saver>,
+    saver: Saver,
 }
 
 impl Inspector {
@@ -40,10 +39,10 @@ impl Inspector {
             dict: HashSet::new(),
             es: Vec::new(),
             map,
-            saver: RefCell::new(Saver {
+            saver: Saver {
                 dict: HashSet::new(),
                 sf: BufWriter::new(file),
-            }),
+            },
         }
     }
 
@@ -104,26 +103,26 @@ impl Inspector {
         }
     }
 
-    async fn commit(&self, data: &[(i64, i32, CompactString)], conn: &mut Client) -> DBResult<()> {
+    async fn commit(&mut self, conn: &mut Client) -> DBResult<()> {
         const SQL: &str = "with tmp_insert(c1, m, c2) as (select * from unnest($1::bigint[], $2::integer[], $3::bigint[])) insert into telegram.link (c1, message_id, c2) select c1, m, c2 from tmp_insert on conflict (c1, message_id, c2) do nothing returning xmax";
 
-        if data.is_empty() {
-            return Ok(());
-        }
-
-        let mut batch = Vec::with_capacity(data.len());
+        let mut batch = Vec::with_capacity(self.es.len());
         {
-            let mut saver = self.saver.borrow_mut();
-            for (channel_id, message_id, result) in data {
-                if let Some(id2) = self.map.get(result) {
-                    if channel_id != id2 {
+            for (channel_id, message_id, result) in core::mem::take(&mut self.es) {
+                if let Some(&id2) = self.map.get(&result) {
+                    if channel_id != id2 { // self reference
                         batch.push((channel_id, message_id, id2));
                     }
-                } else if saver.dict.insert(result.clone()) {
-                    let _ = saver.sf.write_all(result.as_bytes());
-                    let _ = saver.sf.write_all(b"\n");
+                } else if let Entry::Vacant(entry) = self.saver.dict.entry(result.clone()) {
+                    let _ = self.saver.sf.write_all(entry.get().as_bytes());
+                    let _ = self.saver.sf.write_all(b"\n");
+                    entry.insert();
                 }
             }
+        }
+
+        if batch.is_empty() {
+            return Ok(());
         }
 
         let stmt = conn.prepare_static(SQL.into()).await?;
@@ -161,12 +160,12 @@ impl Inspector {
             }
             cnt += 1;
             if cnt % 65536 == 0 {
-                self.commit(&self.es, conn).await?;
+                self.commit(conn).await?;
                 self.es.clear();
             }
         }
 
-        self.commit(&self.es, conn).await.map_err(Into::into)
+        self.commit(conn).await.map_err(Into::into)
     }
 }
 

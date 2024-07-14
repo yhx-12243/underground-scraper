@@ -67,9 +67,7 @@ impl Worker {
         let client =
             client
                 .default_headers(
-                    if let Ok(cookie) =
-                        HeaderValue::try_from(core::mem::take(&mut self.headers.cookie))
-                    {
+                    if let Ok(cookie) = HeaderValue::try_from(core::mem::take(&mut self.headers.cookie)) {
                         Some((COOKIE, cookie))
                     } else {
                         None

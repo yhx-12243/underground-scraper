@@ -160,7 +160,11 @@ pub async fn fetch_content(
         }
     };
     let mut interval = interval_origin;
-    let mut stop_point = interval.map_or(0, |x| x.1);
+    let mut stop_point = interval.map_or(0, |(_, max)| max);
+
+    let mut jumping = interval.is_some_and(
+        |(min, max)| min > 1 && limit > 1 && (max - min).cast_unsigned() < limit - 1
+    );
 
     let mut iter = client.inner.iter_messages(packed);
     let mut buffer = Vec::with_capacity(100);
@@ -175,11 +179,16 @@ pub async fn fetch_content(
                     let sleep = tokio::time::sleep(const { core::time::Duration::from_millis(180) });
                     let db_fut = insert_to_db(&buffer, channel.id, &mut interval, target, db);
                     let batch_max: Option<i32> = join!(sleep, db_fut).await.1;
-                    if let Some((_, r)) = interval && r.cast_unsigned() > limit {
-                        stop_point = stop_point.max(r.wrapping_sub_unsigned(limit));
-                    }
+                    let (l, r) = interval.expect("interval shouldn't be None after insert");
+                    let l_i = r.cast_unsigned().checked_sub(limit).and_then(|x| x.try_into().ok()).unwrap_or(0);
+                    stop_point = stop_point.max(l_i);
                     if batch_max.is_some_and(|x| x <= stop_point) {
-                        break 'outer;
+                        if !jumping {
+                            break 'outer;
+                        }
+                        jumping = false;
+                        stop_point = l_i;
+                        iter = iter.offset_id(l - 1);
                     }
                     buffer.clear();
                 }
