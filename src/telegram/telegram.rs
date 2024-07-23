@@ -27,7 +27,7 @@ use crate::db::DBWrapper;
 pub fn parse_config(file: &Path) -> io::Result<Vec<InitConfig>> {
     let file = File::open(file)?;
     let reader = BufReader::new(file);
-    serde_json::from_reader(reader).map_err(io::Error::other)
+    serde_json::from_reader(reader).map_err(Into::into)
 }
 
 #[derive(Debug)]
@@ -211,7 +211,7 @@ pub async fn fetch_content(
                     }
                     tokio::time::sleep(const { core::time::Duration::from_secs(1) }).await;
                 }
-            };
+            }
         };
         let Some(message) = item else {
             insert_to_db(&buffer, channel.id, &mut interval, target, db).await;

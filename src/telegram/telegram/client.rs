@@ -5,6 +5,7 @@ use std::{
 };
 
 use grammers_client::{Client as ClientInner, Config, InitParams, SignInError};
+use grammers_mtsender::AuthorizationError;
 use grammers_session::Session;
 use hashbrown::HashMap;
 use serde::Deserialize;
@@ -30,7 +31,7 @@ impl Client {
         api_hash: String,
         proxy_url: Option<String>,
         flood_sleep_threshold: u32,
-    ) -> io::Result<(Self, bool)> {
+    ) -> Result<(Self, bool), AuthorizationError> {
         let config = Config {
             session: Session::load_file_or_create(&session_path)?,
             api_id,
@@ -42,8 +43,8 @@ impl Client {
             },
         };
 
-        let inner = ClientInner::connect(config).await.map_err(io::Error::other)?;
-        let is_authorized = inner.is_authorized().await.map_err(io::Error::other)?;
+        let inner = ClientInner::connect(config).await?;
+        let is_authorized = inner.is_authorized().await?;
 
         Ok((Self { inner, session_path }, is_authorized))
     }
@@ -90,7 +91,7 @@ impl Client {
                         let fd = stdin.as_fd().as_raw_fd();
                         let _hi = rpassword::HiddenInput::new(fd);
                         stdin.read_line(&mut password)?;
-                    };
+                    }
                     self.inner
                         .check_password(password_token, password.trim())
                         .await

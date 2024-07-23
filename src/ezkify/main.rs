@@ -2,7 +2,7 @@
     integer_sign_cast,
     iter_array_chunks,
     iter_next_chunk,
-    stmt_expr_attributes
+    stmt_expr_attributes,
 )]
 
 mod parse_item;
@@ -179,7 +179,7 @@ async fn main() -> anyhow::Result<()> {
                 match (config.parse_item)(row) {
                     Ok(item) => insert_db(&mut conn, &args.key, item).await?,
                     Err(e) => tracing::error!(?e),
-                };
+                }
             }
         }
     }

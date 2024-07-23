@@ -1,10 +1,10 @@
 diff --git a/src/client.rs b/src/client.rs
-index 427a050..b6c7b24 100644
+index 92eabde..bffb446 100644
 --- a/src/client.rs
 +++ b/src/client.rs
 @@ -23,7 +23,11 @@ use futures_util::{future, pin_mut, ready, StreamExt, TryStreamExt};
  use parking_lot::Mutex;
- use postgres_protocol::message::{backend::Message, frontend};
+ use postgres_protocol::message::backend::Message;
  use postgres_types::BorrowToSql;
 -use std::collections::HashMap;
 +use std::borrow::Cow;
@@ -73,7 +73,7 @@ index 427a050..b6c7b24 100644
      /// Creates a new prepared statement.
      ///
      /// Prepared statements can be executed repeatedly, and may contain query parameters (indicated by `$1`, `$2`, etc),
-@@ -451,7 +492,7 @@ impl Client {
+@@ -510,7 +551,7 @@ impl Client {
          self.simple_query_raw(query).await?.try_collect().await
      }
  
@@ -83,10 +83,10 @@ index 427a050..b6c7b24 100644
      }
  
 diff --git a/src/error/mod.rs b/src/error/mod.rs
-index f1e2644..c140c2a 100644
+index 75664d2..3aec6a3 100644
 --- a/src/error/mod.rs
 +++ b/src/error/mod.rs
-@@ -337,7 +337,7 @@ pub enum ErrorPosition {
+@@ -338,7 +338,7 @@ pub enum ErrorPosition {
  }
  
  #[derive(Debug, PartialEq)]
@@ -95,7 +95,7 @@ index f1e2644..c140c2a 100644
      Io,
      UnexpectedMessage,
      Tls,
-@@ -437,7 +437,7 @@ impl Error {
+@@ -438,7 +438,7 @@ impl Error {
          self.as_db_error().map(DbError::code)
      }
  
@@ -105,14 +105,14 @@ index f1e2644..c140c2a 100644
      }
  
 diff --git a/src/prepare.rs b/src/prepare.rs
-index e3f09a7..ba8d5a4 100644
+index 1d9bacb..992f475 100644
 --- a/src/prepare.rs
 +++ b/src/prepare.rs
-@@ -126,7 +126,7 @@ fn encode(client: &InnerClient, name: &str, query: &str, types: &[Type]) -> Resu
+@@ -131,7 +131,7 @@ fn encode(client: &InnerClient, name: &str, query: &str, types: &[Type]) -> Resu
      })
  }
  
--async fn get_type(client: &Arc<InnerClient>, oid: Oid) -> Result<Type, Error> {
+-pub(crate) async fn get_type(client: &Arc<InnerClient>, oid: Oid) -> Result<Type, Error> {
 +pub async fn get_type(client: &Arc<InnerClient>, oid: Oid) -> Result<Type, Error> {
      if let Some(type_) = Type::from_oid(oid) {
          return Ok(type_);

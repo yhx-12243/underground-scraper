@@ -38,8 +38,7 @@ pub fn xmax_to_success<'a, I>(rows: I) -> usize
 where
     I: Iterator<Item = &'a tokio_postgres::Row>,
 {
-    rows.filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0))
-        .count()
+    rows.filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0)).count()
 }
 
 pub trait SetLenExt {
