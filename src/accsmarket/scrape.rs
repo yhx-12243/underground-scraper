@@ -47,27 +47,29 @@ pub async fn work(id: i64, c_desc: String, ctx: &Context) {
         }
     };
 
-    let fragment = Html::parse_fragment(&res);
-    let root = fragment.root_element();
     let mut archived = Vec::new();
-    for child in root.child_elements() {
-        let quantity = child
-            .attr("data-qty")
-            .and_then(|x| x.parse().ok())
-            .unwrap_or(0i64);
-        let cost = child
-            .attr("data-cost")
-            .and_then(|x| x.replace(',', ".").parse().ok())
-            .unwrap_or(0.0f64);
-        let desc = if let Some(d) = child.select(&ctx.sel_scp).next() {
-            d.text().map(str::trim).collect()
-        } else {
-            String::new()
-        };
+    {
+        let fragment = Html::parse_fragment(&res);
+        let root = fragment.root_element();
+        for child in root.child_elements() {
+            let quantity = child
+                .attr("data-qty")
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(0i64);
+            let cost = child
+                .attr("data-cost")
+                .and_then(|x| x.replace(',', ".").parse().ok())
+                .unwrap_or(0.0f64);
+            let desc = if let Some(d) = child.select(&ctx.sel_scp).next() {
+                d.text().map(str::trim).collect()
+            } else {
+                String::new()
+            };
 
-        let hash = BuildHasherDefault::<DefaultHasher>::default().hash_one(&desc);
+            let hash = BuildHasherDefault::<DefaultHasher>::default().hash_one(&desc);
 
-        archived.push((hash.cast_signed(), desc, quantity, cost));
+            archived.push((hash.cast_signed(), desc, quantity, cost));
+        }
     }
 
     if !archived.is_empty() {

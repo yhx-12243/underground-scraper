@@ -78,7 +78,6 @@ impl Worker {
                 .user_agent(core::mem::take(&mut self.headers.user_agent))
                 .build()?;
         let target = format_compact!("worker-{}", self.client_port);
-        let mut rng = thread_rng();
 
         loop {
             let works = loop {
@@ -125,7 +124,7 @@ impl Worker {
                                 }
                             }
                         }
-                        Duration::from_millis(rng.gen_range(2400..3000))
+                        Duration::from_millis(thread_rng().gen_range(2400..3000))
                     }
                     Ok(text) => {
                         log::warn!(target: &target, "\x1b[31mwrong\x1b[0m {url}: {text}");

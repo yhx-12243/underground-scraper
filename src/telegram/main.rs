@@ -1,5 +1,4 @@
 #![feature(
-    const_int_from_str,
     stmt_expr_attributes,
     future_join,
     integer_sign_cast,
@@ -18,7 +17,7 @@ mod telegram;
 
 async fn insert_channels<C>(channels: C, conn: &mut tokio_postgres::Client) -> uscr::db::DBResult<()>
 where
-    C: Iterator<Item = telegram::Channel>,
+    C: Iterator<Item = telegram::Channel> + Send,
 {
     const SQL: &str = "insert into telegram.channel (id, name, min_message_id, max_message_id, access_hash, last_fetch, app_id) values ($1, $2, 0, 0, $3, (now() at time zone 'UTC') - interval '1 day', $4) on conflict (id) do update set name = excluded.name, access_hash = excluded.access_hash, app_id = excluded.app_id";
 

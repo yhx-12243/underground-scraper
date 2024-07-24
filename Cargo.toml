@@ -9,16 +9,15 @@ readme = "README.md"
 repository = "https://github.com/yhx-12243/underground-scraper"
 
 [dependencies]
-actix-cors = { version = "0.7.0", features = ["draft-private-network-access"] }
-actix-web = "4.8.0"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
+axum = "0.7.5"
 bb8-postgres = { version = "0.8.1", features = ["with-serde_json-1"] }
 bytes = { version = "1.6.1", features = ["serde"] }
-clap = { version = "4.5.9", features = ["derive", "unicode", "wrap_help", "env", "string", "unstable-v5"] }
-clap_derive = { version = "4.5.8", features = ["unstable-v5"] }
+clap = { version = "4.5.11", features = ["derive", "unicode", "wrap_help", "env", "string", "unstable-v5"] }
+clap_derive = { version = "4.5.11", features = ["unstable-v5"] }
 compact_str = { version = "0.8.0", features = ["serde"] }
 const_format = "0.2.32"
-fantoccini = "0.19.3"
+fantoccini = "0.21.0"
 futures-util = "0.3.30"
 grammers-client = { git = "https://github.com/Lonami/grammers", features = ["parse_invite_link", "proxy"] }
 grammers-mtsender = { git = "https://github.com/Lonami/grammers" }
@@ -27,6 +26,8 @@ grammers-tl-types = { git = "https://github.com/Lonami/grammers" }
 hashbrown = { version = "0.14.5", features = ["serde"] }
 headless_chrome = "1.0.10"
 httpdate = "1.0.3"
+hyper = "1.4.1"
+hyper-util = "0.1.6"
 indicatif = { version = "0.17.8", features = ["improved_unicode"] }
 log = { version = "0.4.22", features = ["release_max_level_info"] }
 parking_lot = "0.12.2"
@@ -38,9 +39,11 @@ reqwest = { version = "0.12.5", features = ["json", "native-tls-alpn"] }
 rpassword = "7.3.1"
 scraper = "0.19.1"
 serde = { version = "1.0.204", features = ["derive"] }
-serde_json = { version = "1.0.120", features = ["float_roundtrip"] }
-tokio = { version = "1.38.1", features = ["macros", "parking_lot", "rt-multi-thread", "tracing"] }
+serde_json = { version = "1.0.121", features = ["float_roundtrip"] }
+tokio = { version = "1.39.2", features = ["macros", "parking_lot", "rt-multi-thread", "tracing"] }
 tokio-postgres = { version = "0.7.11", features = ["with-serde_json-1"] }
+tower = "0.4.13"
+tower-http = { version = "0.5.2", features = ["cors"] }
 tracing = { version = "0.1.40", features = ["log", "release_max_level_info"] }
 unicase = { version = "2.7.0", features = ["nightly"] }
 
@@ -60,7 +63,6 @@ cast_possible_truncation = { level = "allow", priority = 1 } # u64 -> u32
 # cast_sign_loss = { level = "allow", priority = 1 } # i32 -> u32
 default_numeric_fallback = { level = "allow", priority = 1 }
 option_if_let_else = { level = "allow", priority = 1 }
-future_not_send = { level = "allow", priority = 1 }
 host_endian_bytes = { level = "allow", priority = 1 }
 implicit_return = { level = "allow", priority = 1 }
 indexing_slicing = { level = "allow", priority = 1 }

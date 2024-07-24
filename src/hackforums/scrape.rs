@@ -57,48 +57,51 @@ pub async fn work(page: i32, ctx: &Context) {
         }
     };
 
-    let fragment = Html::parse_fragment(&html);
-    let res = fragment
-        .select(&ctx.sel_content_tr)
-        .filter_map(|tr| {
-            let c = tr.child_elements().next_chunk::<5>().ok()?;
+    let res = {
+        let fragment = Html::parse_fragment(&html);
+        fragment
+            .select(&ctx.sel_content_tr)
+            .filter_map(|tr| {
+                let c = tr.child_elements().next_chunk::<5>().ok()?;
 
-            let sub = c[1].select(&ctx.sel_subject_old).next()?;
-            let title = sub.text().map(str::trim).collect::<String>();
-            let tid = sub.attr("id")?.strip_prefix("tid_")?.parse().ok()?;
-            let replies = c[2]
-                .text()
-                .map(str::trim)
-                .collect::<String>()
-                .replace(',', "")
-                .parse()
-                .ok()?;
-            let views = c[3]
-                .text()
-                .map(str::trim)
-                .collect::<String>()
-                .replace(',', "")
-                .parse()
-                .ok()?;
-            let lastPost = {
-                let a = c[4].child_elements().next()?.first_child()?;
-                if let Some(b) = ElementRef::wrap(a) {
-                    SystemTime::UNIX_EPOCH
-                        .checked_add(Duration::from_secs(b.attr("data-timestamp")?.parse().ok()?))?
-                } else {
-                    simple_parse(a.value().as_text()?.as_ascii()?)?
-                }
-            };
+                let sub = c[1].select(&ctx.sel_subject_old).next()?;
+                let title = sub.text().map(str::trim).collect::<String>();
+                let tid = sub.attr("id")?.strip_prefix("tid_")?.parse().ok()?;
+                let replies = c[2]
+                    .text()
+                    .map(str::trim)
+                    .collect::<String>()
+                    .replace(',', "")
+                    .parse()
+                    .ok()?;
+                let views = c[3]
+                    .text()
+                    .map(str::trim)
+                    .collect::<String>()
+                    .replace(',', "")
+                    .parse()
+                    .ok()?;
+                let lastPost = {
+                    let a = c[4].child_elements().next()?.first_child()?;
+                    if let Some(b) = ElementRef::wrap(a) {
+                        SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
+                            b.attr("data-timestamp")?.parse().ok()?,
+                        ))?
+                    } else {
+                        simple_parse(a.value().as_text()?.as_ascii()?)?
+                    }
+                };
 
-            Some(Thread {
-                tid,
-                title,
-                replies,
-                views,
-                lastPost,
+                Some(Thread {
+                    tid,
+                    title,
+                    replies,
+                    views,
+                    lastPost,
+                })
             })
-        })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    };
 
     if !res.is_empty() {
         let res: Result<(), BB8Error> = try {

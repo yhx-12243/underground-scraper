@@ -42,6 +42,9 @@ where
 }
 
 pub trait SetLenExt {
+    /// # Safety
+    ///
+    /// Caller should satisfy the safety requirements of `Vec::set_len`.
     unsafe fn set_len(&mut self, len: usize);
     fn append_i32(&mut self, value: i32);
 }

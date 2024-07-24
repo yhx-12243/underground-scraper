@@ -43,7 +43,7 @@ pub async fn fetch_channels_by_id<C>(
     channels: C,
 ) -> Result<Vec<Channel>, InvocationError>
 where
-    C: Iterator<Item = i64>,
+    C: Iterator<Item = i64> + Send,
 {
     use tl::{
         enums::{messages::Chats, Chat, InputChannel::Channel as Ch},

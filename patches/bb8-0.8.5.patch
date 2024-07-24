@@ -1,0 +1,32 @@
+diff --git a/src/api.rs b/src/api.rs
+index 1f2d598..e404ce2 100644
+--- a/src/api.rs
++++ b/src/api.rs
+@@ -1,6 +1,7 @@
+ use std::borrow::Cow;
+ use std::error;
+ use std::fmt;
++use std::future::Future;
+ use std::marker::PhantomData;
+ use std::ops::{Deref, DerefMut};
+ use std::time::Duration;
+@@ -373,7 +374,6 @@ impl<M: ManageConnection> Builder<M> {
+ }
+ 
+ /// A trait which provides connection-specific functionality.
+-#[async_trait]
+ pub trait ManageConnection: Sized + Send + Sync + 'static {
+     /// The connection type this manager deals with.
+     type Connection: Send + 'static;
+@@ -381,9 +381,9 @@ pub trait ManageConnection: Sized + Send + Sync + 'static {
+     type Error: fmt::Debug + Send + 'static;
+ 
+     /// Attempts to create a new connection.
+-    async fn connect(&self) -> Result<Self::Connection, Self::Error>;
++    fn connect(&self) -> impl Future<Output = Result<Self::Connection, Self::Error>> + Send;
+     /// Determines if the connection is still connected to the database.
+-    async fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error>;
++    fn is_valid(&self, conn: &mut Self::Connection) -> impl Future<Output = Result<(), Self::Error>> + Send;
+     /// Synchronously determine if the connection is no longer usable, if possible.
+     fn has_broken(&self, conn: &mut Self::Connection) -> bool;
+ }

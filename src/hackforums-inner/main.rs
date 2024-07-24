@@ -1,4 +1,4 @@
-#![feature(try_blocks)]
+#![feature(let_chains, never_type, try_blocks)]
 
 mod service;
 
@@ -25,40 +25,68 @@ async fn get_black_ids() -> impl Iterator<Item = i64> {
         .filter_map(|row| row.try_get(0).ok())
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    use actix_web::{web, App, HttpServer};
+#[tokio::main]
+async fn main() -> std::io::Result<!> {
+    use axum::{
+        extract::DefaultBodyLimit,
+        routing::{get, post},
+        Router,
+    };
+    use hyper::{body::Incoming, server::conn, Request};
+    use hyper_util::rt::TokioIo;
+    use tokio::net::UnixListener;
+    use tower::Service;
+    use tower_http::cors::CorsLayer;
+
+    const SOCK: &str = "underground-scraper.sock";
 
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;
 
-    service::init(vec![], get_black_ids().await.collect());
+    service::init(Vec::new(), get_black_ids().await.collect());
 
-    let json_config = web::JsonConfig::default()
-        .content_type_required(false)
-        .limit(usize::MAX);
+    let app: Router = Router::new()
+        .route("/get", get(service::get))
+        .route("/get/black", get(service::get_black))
+        .route("/send", post(service::send))
+        .route("/send/black", post(service::send_black))
+        .layer(DefaultBodyLimit::disable())
+        .layer(CorsLayer::very_permissive().allow_private_network(true));
 
-    let server = HttpServer::new(move || {
-        let cors = actix_cors::Cors::default()
-            .allow_any_origin()
-            .allow_any_method()
-            .allow_any_header()
-            .allow_private_network_access();
+    if let Err(err) = std::fs::remove_file(SOCK)
+        && err.kind() != std::io::ErrorKind::NotFound
+    {
+        return Err(err);
+    }
 
-        App::new()
-            .app_data(json_config.clone())
-            .wrap(cors)
-            .service(service::get)
-            .service(service::get_black)
-            // .service(service::send)
-            .service(service::send_black)
-    });
+    let listener = UnixListener::bind(SOCK)?;
+    let mut http_builder = conn::http1::Builder::new();
+    http_builder.auto_date_header(false);
 
-    server.bind_uds("underground-scraper.sock")?.run().await
+    loop {
+        let socket = match listener.accept().await {
+            Ok(t) => t.0,
+            Err(e) => {
+                tracing::warn!("server accept error: {e:?}");
+                continue;
+            }
+        };
+        let stream = TokioIo::new(socket);
+
+        let app_ = app.clone();
+        let conn = http_builder.serve_connection(
+            stream,
+            hyper::service::service_fn(move |request: Request<Incoming>| app_.clone().call(request)),
+        );
+        tokio::spawn(async move {
+            if let Err(e) = conn.await {
+                tracing::warn!("server error: {e:?}");
+            }
+        });
+    }
 }
 
 /*
-
 const dp = new DOMParser();
 const sleep = ms => new Promise(f => setTimeout(f, ms));
 

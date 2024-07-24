@@ -19,7 +19,7 @@ pub async fn work<'a, I>(
     conn: &mut DBClient,
 ) -> impl Iterator<Item = Channel>
 where
-    I: Iterator<Item = (&'a i32, &'a Client)>,
+    I: Iterator<Item = (&'a i32, &'a Client)> + Send,
 {
     let keys = Mutex::new(keys);
     let stmt = conn.prepare_static(SQL_INVITE.into()).await.unwrap();
@@ -40,24 +40,26 @@ async fn get_description(
     target: &str,
 ) -> String {
     if ty == PackedType::User || ty == PackedType::Bot {
-        use tl::enums::users::UserFull::Full;
+        use tl::{
+            enums::{users::UserFull as EUUserFull, UserFull as EUserFull},
+            types::users::UserFull as TUUserFull,
+        };
 
         let request = tl::functions::users::GetFullUser {
             id: tl::enums::InputUser::User(tl::types::InputUser { user_id: id, access_hash })
         };
-        let Full(user) = match client.inner.invoke(&request).await {
-            Ok(user) => user,
+        match client.inner.invoke(&request).await {
+            Ok(EUUserFull::Full(TUUserFull { full_user: EUserFull::Full(u), .. })) => u.about.unwrap_or_default(),
             Err(e) => {
                 log::error!(target: target, "get \x1b[35mdescription of [{ty}] {id}\x1b[0m err: {e:?}");
-                return e.to_string();
+                e.to_string()
             }
-        };
-
-        match user.full_user {
-            tl::enums::UserFull::Full(u) => u.about.unwrap_or_default(),
         }
     } else {
-        use tl::enums::messages::ChatFull::Full;
+        use tl::{
+            enums::{messages::ChatFull as EMChatFull, ChatFull as EChatFull},
+            types::messages::ChatFull as TMChatFull,
+        };
 
         let response = if ty == PackedType::Chat {
             let request = tl::functions::messages::GetFullChat { chat_id: id };
@@ -69,17 +71,13 @@ async fn get_description(
             client.inner.invoke(&request).await
         };
 
-        let Full(chat) = match response {
-            Ok(chat) => chat,
+        match response {
+            Ok(EMChatFull::Full(TMChatFull { full_chat: EChatFull::Full(c), .. })) => c.about,
+            Ok(EMChatFull::Full(TMChatFull { full_chat: EChatFull::ChannelFull(c), .. })) => c.about,
             Err(e) => {
                 log::error!(target: target, "get \x1b[35mdescription of [{ty}] {id}\x1b[0m err: {e:?}");
-                return e.to_string();
+                e.to_string()
             }
-        };
-
-        match chat.full_chat {
-            tl::enums::ChatFull::Full(c) => c.about,
-            tl::enums::ChatFull::ChannelFull(c) => c.about,
         }
     }
 }

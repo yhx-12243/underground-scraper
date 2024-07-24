@@ -72,57 +72,59 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
         }
     };
 
-    let fragment = Html::parse_fragment(&html);
-    let res = fragment
-        .select(&ctx.sel_struct_item)
-        .filter_map(|entry| {
-            let c = entry.child_elements().next_chunk::<4>().ok()?;
+    let res = {
+        let fragment = Html::parse_fragment(&html);
+        fragment
+            .select(&ctx.sel_struct_item)
+            .filter_map(|entry| {
+                let c = entry.child_elements().next_chunk::<4>().ok()?;
 
-            let id = ctx
-                .reg_id
-                .captures(entry.attr("class")?)?
-                .get(1)?
-                .as_str()
-                .parse()
-                .ok()?;
-            let author = entry.attr("data-author")?.to_owned();
-            let title = c[1]
-                .select(&ctx.sel_title)
-                .next()?
-                .text()
-                .map(str::trim)
-                .collect();
-            let time = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
-                c[1].select(&ctx.sel_udt)
-                    .next()?
-                    .attr("data-time")?
+                let id = ctx
+                    .reg_id
+                    .captures(entry.attr("class")?)?
+                    .get(1)?
+                    .as_str()
                     .parse()
-                    .ok()?,
-            ))?;
-
-            let mut dd = c[2].select(&ctx.sel_dd);
-            let replies = _pa(&dd.next()?.text().map(str::trim).collect::<String>())?;
-            let views = _pa(&dd.next()?.text().map(str::trim).collect::<String>())?;
-
-            let lastReply = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
-                c[3].select(&ctx.sel_udt)
+                    .ok()?;
+                let author = entry.attr("data-author")?.to_owned();
+                let title = c[1]
+                    .select(&ctx.sel_title)
                     .next()?
-                    .attr("data-time")?
-                    .parse()
-                    .ok()?,
-            ))?;
+                    .text()
+                    .map(str::trim)
+                    .collect();
+                let time = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
+                    c[1].select(&ctx.sel_udt)
+                        .next()?
+                        .attr("data-time")?
+                        .parse()
+                        .ok()?,
+                ))?;
 
-            Some(Post {
-                id,
-                author,
-                title,
-                time,
-                replies,
-                views,
-                lastReply,
+                let mut dd = c[2].select(&ctx.sel_dd);
+                let replies = _pa(&dd.next()?.text().map(str::trim).collect::<String>())?;
+                let views = _pa(&dd.next()?.text().map(str::trim).collect::<String>())?;
+
+                let lastReply = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
+                    c[3].select(&ctx.sel_udt)
+                        .next()?
+                        .attr("data-time")?
+                        .parse()
+                        .ok()?,
+                ))?;
+
+                Some(Post {
+                    id,
+                    author,
+                    title,
+                    time,
+                    replies,
+                    views,
+                    lastReply,
+                })
             })
-        })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    };
 
     if !res.is_empty() {
         let res: Result<(), BB8Error> = try {
