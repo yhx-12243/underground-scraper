@@ -1,35 +1,86 @@
+use core::{fmt::Write, pin::pin};
+
 use compact_str::CompactString;
+use either::Either::{self, Left, Right};
+use futures_util::TryStreamExt;
 use grammers_client::InvocationError;
 use grammers_mtsender::RpcError;
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
+use hashbrown::HashSet;
 use parking_lot::Mutex;
+use tokio_postgres::types::{Json, ToSql};
 use tokio_postgres::Client as DBClient;
+use unicase::UniCase;
+use uscr::db::DBResult;
 
 use crate::{
     db::DBWrapper,
-    telegram::{client::Client, Channel},
+    telegram::{client::Client, BotCommand, Channel, User},
 };
 
-const SQL_INVITE: &str = "insert into telegram.invite (hash, channel_id, type, description) values ($1, $2, $3, $4) on conflict (hash) do update set channel_id = excluded.channel_id, type = excluded.type, description = excluded.description";
+pub async fn get_searched_peers(conn: &mut DBClient) -> DBResult<HashSet<UniCase<CompactString>>> {
+    const SQL_GET: &str = "select hash from telegram.invite union all select name from telegram.channel union all select name from telegram.bots";
+
+    let stmt = conn.prepare_static(SQL_GET.into()).await?;
+    let stream = conn.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
+    let mut stream = pin!(stream);
+    let mut result = HashSet::new();
+    while let Some(row) = stream.try_next().await? {
+        let s = row.try_get::<_, &str>(0)?;
+        result.insert(UniCase::new(CompactString::new(s)));
+    }
+    Ok(result)
+}
+
+pub fn separate_id_and_names(
+    raw: Vec<CompactString>,
+    filter_out: &HashSet<UniCase<CompactString>>,
+) -> (HashSet<i64>, HashSet<UniCase<CompactString>>) {
+    let mut ids = HashSet::with_capacity(raw.len());
+    let mut name_or_hashes = HashSet::with_capacity(raw.len());
+
+    for entry in raw {
+        if let Ok(id) = entry.parse() {
+            ids.insert(id);
+        } else {
+            let entry = UniCase::new(entry);
+            if !filter_out.contains(&entry) {
+                name_or_hashes.insert(entry);
+            }
+        }
+    }
+
+    (ids, name_or_hashes)
+}
 
 pub async fn work<'a, I>(
     keys: Vec<CompactString>,
     clients: I,
     conn: &mut DBClient,
-) -> impl Iterator<Item = Channel>
+) -> (Vec<Channel>, Vec<User>)
 where
     I: Iterator<Item = (&'a i32, &'a Client)> + Send,
 {
+    const SQL_INVITE: &str = "insert into telegram.invite (hash, channel_id, type, description) values ($1, $2, $3, $4) on conflict (hash) do update set channel_id = excluded.channel_id, type = excluded.type, description = excluded.description";
+    const SQL_CMDS: &str = "insert into telegram.interaction (bot_id, message_id, request, response) values ($1, $2, $3, $4) on conflict (bot_id, message_id) do update set request = excluded.request, response = excluded.response";
+
     let keys = Mutex::new(keys);
-    let stmt = conn.prepare_static(SQL_INVITE.into()).await.unwrap();
+    let stmt_invite = conn.prepare_static(SQL_INVITE.into()).await.unwrap();
+    let stmt_cmds = conn.prepare_static(SQL_CMDS.into()).await.unwrap();
     let db = DBWrapper {
         conn,
-        stmts: [&stmt],
+        stmts: [&stmt_invite, &stmt_cmds],
     };
     let futs = clients.map(|(id, client)| into_future(*id, client, &keys, db));
     let folded = futures_util::future::join_all(futs).await;
-    folded.into_iter().flatten()
+
+    let (mut channels, mut users) = (Vec::new(), Vec::new());
+    for (mut c, mut u) in folded {
+        channels.append(&mut c);
+        users.append(&mut u);
+    }
+    (channels, users)
 }
 
 async fn get_description(
@@ -38,10 +89,13 @@ async fn get_description(
     id: i64,
     access_hash: i64,
     target: &str,
-) -> String {
+) -> (String, Option<Vec<BotCommand>>) {
     if ty == PackedType::User || ty == PackedType::Bot {
         use tl::{
-            enums::{users::UserFull as EUUserFull, UserFull as EUserFull},
+            enums::{
+                users::UserFull as EUUserFull, BotInfo as EBotInfo,
+                BotMenuButton as EBotMenuButton, UserFull as EUserFull,
+            },
             types::users::UserFull as TUUserFull,
         };
 
@@ -49,10 +103,26 @@ async fn get_description(
             id: tl::enums::InputUser::User(tl::types::InputUser { user_id: id, access_hash })
         };
         match client.inner.invoke(&request).await {
-            Ok(EUUserFull::Full(TUUserFull { full_user: EUserFull::Full(u), .. })) => u.about.unwrap_or_default(),
+            Ok(EUUserFull::Full(TUUserFull { full_user: EUserFull::Full(u), .. })) => {
+                let mut base = u.about.unwrap_or_default();
+                if let Some(EBotInfo::Info(bot_info)) = u.bot_info {
+                    if let Some(ref desc) = bot_info.description {
+                        base.push_str("\n\n");
+                        base.push_str(desc);
+                    }
+                    if let Some(EBotMenuButton::Button(button)) = bot_info.menu_button {
+                        let _ = write!(&mut base, "\n\n[{}]({})", button.text, button.url);
+                    }
+                    if let Some(commands) = bot_info.commands {
+                        return (base, Some(commands.into_iter().map(Into::into).collect::<Vec<BotCommand>>()));
+                    }
+                }
+
+                (base, None)
+            },
             Err(e) => {
                 log::error!(target: target, "get \x1b[35mdescription of [{ty}] {id}\x1b[0m err: {e:?}");
-                e.to_string()
+                (e.to_string(), None)
             }
         }
     } else {
@@ -71,23 +141,23 @@ async fn get_description(
             client.inner.invoke(&request).await
         };
 
-        match response {
+        (match response {
             Ok(EMChatFull::Full(TMChatFull { full_chat: EChatFull::Full(c), .. })) => c.about,
             Ok(EMChatFull::Full(TMChatFull { full_chat: EChatFull::ChannelFull(c), .. })) => c.about,
             Err(e) => {
                 log::error!(target: target, "get \x1b[35mdescription of [{ty}] {id}\x1b[0m err: {e:?}");
                 e.to_string()
             }
-        }
+        }, None)
     }
 }
 
 async fn access_channel(
     client: &Client,
     name: &str,
-    db: DBWrapper<'_, 1>,
+    db: DBWrapper<'_, 2>,
     target: &str,
-) -> anyhow::Result<Channel> {
+) -> anyhow::Result<Either<Channel, User>> {
     use grammers_client::types::Chat::{Channel as Chan, Group, User};
 
     log::info!(target: target, "======== \x1b[32mACCESSING CHANNEL \x1b[36m{name}\x1b[0m ========");
@@ -106,7 +176,7 @@ async fn access_channel(
     };
 
     let PackedChat { id, access_hash, ty } = chat.pack();
-    let description = get_description(client, ty, id, access_hash.unwrap_or(0), target).await;
+    let (description, commands) = get_description(client, ty, id, access_hash.unwrap_or(0), target).await;
 
     db.conn.execute(db.stmts[0], &[
         &name,
@@ -119,22 +189,24 @@ async fn access_channel(
         &description,
     ]).await?;
 
-    if matches!(chat, User(_)) {
-        anyhow::bail!("{name} is a user");
+    if let Some(commands) = commands {
+        db.conn.execute(db.stmts[1], &[&id, &-1i32, &"<command list>", &Json(commands)]).await?;
     }
 
-    Ok(Channel {
+    let peer = Channel {
         id,
         name: chat.username().unwrap_or_else(|| chat.name()).into(),
         access_hash: access_hash.unwrap_or(0),
         app_id: 0,
-    })
+    };
+
+    Ok(if matches!(chat, User(_)) { Right(crate::telegram::User(peer)) } else { Left(peer) })
 }
 
 async fn access_invite(
     client: &Client,
     name: &str,
-    db: DBWrapper<'_, 1>,
+    db: DBWrapper<'_, 2>,
     target: &str,
 ) -> anyhow::Result<Channel> {
     use tl::{
@@ -168,7 +240,7 @@ async fn access_invite(
 
     match chat {
         Chat::Channel(tl::types::Channel { id, access_hash, title, username, .. }) => {
-            let description = get_description(client, PackedType::Megagroup, id, access_hash.unwrap_or(0), target).await;
+            let description = get_description(client, PackedType::Megagroup, id, access_hash.unwrap_or(0), target).await.0;
             db.conn
                 .execute(
                     db.stmts[0],
@@ -184,7 +256,7 @@ async fn access_invite(
             })
         }
         Chat::Chat(tl::types::Chat { id, title, .. }) => {
-            let description = get_description(client, PackedType::Chat, id, 0, target).await;
+            let description = get_description(client, PackedType::Chat, id, 0, target).await.0;
             db.conn
                 .execute(
                     db.stmts[0],
@@ -207,21 +279,27 @@ async fn into_future(
     id: i32,
     client: &Client,
     keys: &Mutex<Vec<CompactString>>,
-    db: DBWrapper<'_, 1>,
-) -> Vec<Channel> {
+    db: DBWrapper<'_, 2>,
+) -> (Vec<Channel>, Vec<User>) {
     let mut channels = Vec::new();
+    let mut users = Vec::new();
     let target_access_channel = format!("telegram-access-channel({id})");
     let target_access_invite = format!("telegram-access-invite({id})");
 
     loop {
         let Some(key) = keys.lock().pop() else {
-            return channels;
+            return (channels, users);
         };
 
         match access_channel(client, &key, db, &target_access_channel).await {
-            Ok(mut channel) => {
+            Ok(Left(mut channel)) => {
                 channel.app_id = id;
                 channels.push(channel);
+                continue;
+            }
+            Ok(Right(User(mut user))) => {
+                user.app_id = id;
+                users.push(User(user));
                 continue;
             }
             Err(e) => log::error!(target: &target_access_channel, "{e:?}"),

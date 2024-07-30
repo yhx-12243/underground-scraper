@@ -53,11 +53,14 @@ async fn main() -> std::io::Result<!> {
         .layer(DefaultBodyLimit::disable())
         .layer(CorsLayer::very_permissive().allow_private_network(true));
 
-    if let Err(err) = std::fs::remove_file(SOCK)
-        && err.kind() != std::io::ErrorKind::NotFound
-    {
+    if let Err(err) = std::fs::remove_file(SOCK) && err.kind() != std::io::ErrorKind::NotFound {
         return Err(err);
     }
+
+    // Decomment following two lines and comment out all subsequent lines to listen on TCP 18322 port.
+    //
+    // let listener = tokio::net::TcpListener::bind("0.0.0.0:18322")?;
+    // axum::serve(listener, app).await
 
     let listener = UnixListener::bind(SOCK)?;
     let mut http_builder = conn::http1::Builder::new();
@@ -74,15 +77,10 @@ async fn main() -> std::io::Result<!> {
         let stream = TokioIo::new(socket);
 
         let app_ = app.clone();
-        let conn = http_builder.serve_connection(
+        tokio::spawn(http_builder.serve_connection(
             stream,
             hyper::service::service_fn(move |request: Request<Incoming>| app_.clone().call(request)),
-        );
-        tokio::spawn(async move {
-            if let Err(e) = conn.await {
-                tracing::warn!("server error: {e:?}");
-            }
-        });
+        ));
     }
 }
 

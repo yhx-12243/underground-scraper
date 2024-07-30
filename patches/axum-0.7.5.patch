@@ -246,7 +246,7 @@ index fb401c0..e72c2e1 100644
  where
      InnerState: FromRef<OuterState>,
 diff --git a/src/extract/ws.rs b/src/extract/ws.rs
-index cfd10c5..e70fc80 100644
+index cfd10c5..1496d2f 100644
 --- a/src/extract/ws.rs
 +++ b/src/extract/ws.rs
 @@ -93,7 +93,6 @@
@@ -271,7 +271,7 @@ index cfd10c5..e70fc80 100644
      /// Returns `None` if the stream has closed.
 -    pub async fn recv(&mut self) -> Option<Result<Message, Error>> {
 -        self.next().await
-+    pub fn recv(&mut self) -> impl Future<Output = Option<Result<Message, Error>>> + Send + Sync {
++    pub fn recv(&mut self) -> impl Future<Output = Option<Result<Message, Error>>> + Send + '_ {
 +        self.next()
      }
  

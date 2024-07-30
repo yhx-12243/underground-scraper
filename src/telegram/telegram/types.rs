@@ -68,11 +68,9 @@ impl From<tl::enums::Peer> for Peer {
             enums::Peer,
             types::{PeerChannel, PeerChat, PeerUser},
         };
-        let (
-            | Peer::Channel(PeerChannel { channel_id: id })
-            | Peer::Chat(PeerChat { chat_id: id })
-            | Peer::User(PeerUser { user_id: id })
-        ) = peer;
+        let (Peer::Channel(PeerChannel { channel_id: id })
+        | Peer::Chat(PeerChat { chat_id: id })
+        | Peer::User(PeerUser { user_id: id })) = peer;
         Self(id)
     }
 }
@@ -147,7 +145,8 @@ impl From<tl::types::Message> for Message {
             message: message.message,
             media: message.media.map(|_| ()),
             reply_markup: message.reply_markup.map(Into::into),
-            entities: message.entities
+            entities: message
+                .entities
                 .map(|entities| entities.into_iter().map(|_| ()).collect()),
             views: message.views,
             forwards: message.forwards,
@@ -156,10 +155,26 @@ impl From<tl::types::Message> for Message {
             post_author: message.post_author,
             grouped_id: message.grouped_id,
             reactions: message.reactions.map(|_| ()),
-            restriction_reason: message.restriction_reason
+            restriction_reason: message
+                .restriction_reason
                 .map(|reason| reason.into_iter().map(|_| ()).collect()),
             ttl_period: message.ttl_period,
             quick_reply_shortcut_id: message.quick_reply_shortcut_id,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct BotCommand {
+    pub command: String,
+    pub description: String,
+}
+
+impl From<tl::enums::BotCommand> for BotCommand {
+    fn from(tl::enums::BotCommand::Command(cmd): tl::enums::BotCommand) -> Self {
+        Self {
+            command: cmd.command,
+            description: cmd.description,
         }
     }
 }

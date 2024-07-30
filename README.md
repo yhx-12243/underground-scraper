@@ -204,7 +204,7 @@ The server also has the functions like "load balancing", different scrapers (wor
 
 ##### Usage
 
-We can use `./hackforums-inner` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward (like NGINX) it to a TCP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/hackforums-inner/main.rs#L55)[^1].
+We can use `./hackforums-inner` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward (like NGINX) it to a TCP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/hackforums-inner/main.rs#L60)[^1].
 
 [^1]: Anyway, as long as one can access the server in the same manner (TCP port / socket), then it will work. For example, the `blackhatworld-worker` uses the TCP port 18322 in localhost.
 
@@ -316,9 +316,27 @@ CREATE TABLE telegram.invite (
     PRIMARY KEY (hash)
 );
 
+CREATE TABLE telegram.bots (
+    id bigint NOT NULL,
+    name text NOT NULL,
+    access_hash bigint NOT NULL,
+    app_id integer NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE telegram.interaction (
+    bot_id bigint NOT NULL,
+    message_id integer NOT NULL,
+    request text NOT NULL,
+    response jsonb NOT NULL,
+    PRIMARY KEY (bot_id, message_id)
+);
+
 CREATE INDEX ON telegram.channel (lower(name));
 
 CREATE INDEX ON telegram.message (channel_id, message_id);
+
+CREATE INDEX ON telegram.bots (lower(name));
 ```
 
 #### Usage

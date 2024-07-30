@@ -1,26 +1,29 @@
 pub mod client;
 mod types;
 
+pub use types::BotCommand;
+
 use std::{
     fs::File,
     future::join,
     io::{self, BufReader},
     path::Path,
+    time::Duration,
 };
 
 use client::{Client, InitConfig};
 use compact_str::CompactString;
-use grammers_client::client::bots::InvocationError;
-use grammers_mtsender::RpcError;
+use grammers_client::InputMessage;
+use grammers_mtsender::{InvocationError, RpcError};
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
+use tokio::{sync::oneshot, time::timeout};
 use tokio_postgres::types::Json;
+use types::Message;
 use uscr::{
     db::{DBResult, ToSqlIter},
     util::xmax_to_success,
 };
-
-use types::Message;
 
 use crate::db::DBWrapper;
 
@@ -29,6 +32,10 @@ pub fn parse_config(file: &Path) -> io::Result<Vec<InitConfig>> {
     let reader = BufReader::new(file);
     serde_json::from_reader(reader).map_err(Into::into)
 }
+
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct User(pub Channel);
 
 #[derive(Debug)]
 pub struct Channel {
@@ -162,9 +169,8 @@ pub async fn fetch_content(
     let mut interval = interval_origin;
     let mut stop_point = interval.map_or(0, |(_, max)| max);
 
-    let mut jumping = interval.is_some_and(
-        |(min, max)| min > 1 && limit > 1 && (max - min).cast_unsigned() < limit - 1
-    );
+    let mut jumping = interval
+        .is_some_and(|(min, max)| min > 1 && limit > 1 && (max - min).cast_unsigned() < limit - 1);
 
     let mut iter = client.inner.iter_messages(packed);
     let mut buffer = Vec::with_capacity(100);
@@ -217,10 +223,60 @@ pub async fn fetch_content(
             insert_to_db(&buffer, channel.id, &mut interval, target, db).await;
             break;
         };
-        let message = Message::from(message.raw);
-
-        buffer.push((message.id, message));
+        buffer.push((message.raw.id, message.raw.into()));
     }
 
     log::info!(target: target, "span update (of {}): {:?} => {:?}", channel.id, interval_origin, interval);
+}
+
+async fn interact_inner(
+    client: &Client,
+    chat: PackedChat,
+    text: &str,
+    target: &str,
+) -> Option<Message> {
+    if let Err(e) = client.inner.send_message(chat, InputMessage::text(text)).await {
+        log::error!(target: target, "sending {text}: {e:#?}");
+        return None;
+    }
+
+    let (tx, rx) = oneshot::channel();
+    client.register(chat.id, tx);
+    let fut = timeout(const { Duration::from_secs(10) }, rx);
+
+    match fut.await {
+        Ok(Ok(resp)) => Some(resp.raw.into()),
+        Ok(Err(e)) => {
+            log::error!(target: target, "receiving {text}: {e:#?}");
+            None
+        }
+        Err(_) => {
+            log::error!(target: target, "receiving {text}: no response");
+            None
+        }
+    }
+}
+
+pub async fn interact_bot(client: &Client, bot: &User, target: &str, db: DBWrapper<'_, 1>) {
+    log::info!(target: target, "======== \x1b[1;34mINTERACTING BOT \x1b[36m{}\x1b[0m ========", bot.0.id);
+
+    let packed = PackedChat {
+        ty: grammers_session::PackedType::Bot,
+        id: bot.0.id,
+        access_hash: (bot.0.access_hash != 0).then_some(bot.0.access_hash),
+    };
+
+    if let Some(resp_start) = interact_inner(client, packed.clone(), "/start", target).await {
+        let id = resp_start.id;
+        if let Err(e) = db.conn.execute(db.stmts[0], &[&bot.0.id, &id, &"/start", &Json(resp_start)]).await {
+            log::error!(target: target, "db(insert /start): {e:?}");
+        }
+    }
+
+    if let Some(resp_help) = interact_inner(client, packed, "/help", target).await {
+        let id = resp_help.id;
+        if let Err(e) = db.conn.execute(db.stmts[0], &[&bot.0.id, &id, &"/help", &Json(resp_help)]).await {
+            log::error!(target: target, "db(insert /help): {e:?}");
+        }
+    }
 }

@@ -170,19 +170,13 @@ impl Inspector {
 }
 
 pub async fn generate_user_id_map(conn: &mut Client) -> DBResult<HashMap<CompactString, i64>> {
-    const SQL1: &str = "select channel_id, hash from telegram.invite";
-    const SQL2: &str = "select id, name from telegram.channel";
+    const SQL: &str = "select channel_id, hash from telegram.invite union all select id, name from telegram.channel union all select id, name from telegram.bots";
 
-    let stmt = conn.prepare_static(SQL1.into()).await?;
+    let stmt = conn.prepare_static(SQL.into()).await?;
     let rows = conn.query(&stmt, &[]).await?;
-    let iter1 = rows.into_iter();
 
-    let stmt = conn.prepare_static(SQL2.into()).await?;
-    let rows = conn.query(&stmt, &[]).await?;
-    let iter2 = rows.into_iter();
-
-    Ok(iter1
-        .chain(iter2)
+    Ok(rows
+        .into_iter()
         .filter_map(|row| {
             let id = row.try_get(0).ok()?;
             let name = row.try_get::<_, &str>(1).ok()?;

@@ -2,13 +2,20 @@ use std::{
     io::{self, stdin, stdout, BufRead, Write},
     os::fd::{AsFd, AsRawFd},
     path::PathBuf,
+    sync::Arc,
 };
 
-use grammers_client::{Client as ClientInner, Config, InitParams, SignInError};
-use grammers_mtsender::AuthorizationError;
+use dashmap::DashMap;
+use grammers_client::{
+    types::Message, Client as ClientInner, Config, InitParams, SignInError, Update,
+};
+use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::Session;
-use hashbrown::HashMap;
+use hashbrown::{hash_map::DefaultHashBuilder, HashMap};
 use serde::Deserialize;
+use tokio::{sync::oneshot, task::JoinHandle};
+
+use super::types::Peer;
 
 #[derive(Deserialize)]
 pub struct InitConfig {
@@ -21,6 +28,8 @@ pub struct InitConfig {
 #[derive(Debug)]
 pub struct Client {
     pub inner: ClientInner,
+    promises: Arc<DashMap<i64, oneshot::Sender<Message>, DefaultHashBuilder>>,
+    listen_fut: Option<JoinHandle<Result<(), InvocationError>>>,
     session_path: PathBuf,
 }
 
@@ -46,7 +55,15 @@ impl Client {
         let inner = ClientInner::connect(config).await?;
         let is_authorized = inner.is_authorized().await?;
 
-        Ok((Self { inner, session_path }, is_authorized))
+        Ok((
+            Self {
+                inner,
+                promises: Arc::new(DashMap::with_hasher(Default::default())),
+                listen_fut: None,
+                session_path,
+            },
+            is_authorized,
+        ))
     }
 
     pub async fn login(&self, hid: i32) -> io::Result<()> {
@@ -105,6 +122,40 @@ impl Client {
 
     pub fn save(&self) -> io::Result<()> {
         self.inner.session().save_to_file(&*self.session_path)
+    }
+
+    async fn listen_inner(
+        client: ClientInner,
+        promises: Arc<DashMap<i64, oneshot::Sender<Message>, DefaultHashBuilder>>,
+    ) -> Result<(), InvocationError> {
+        while let Some(update) = client.next_update().await? {
+            if let Update::NewMessage(message) = update
+                && !message.outgoing()
+                && let Some(ref peer) = message.raw.from_id
+                && let Some((_, sender)) = promises.remove(&Peer::from(peer.clone()).0)
+                && let Err(e) = sender.send(message)
+            {
+                tracing::info!(target: "telegram-listener", "error sending message: {e:?}");
+            }
+        }
+        Ok(())
+    }
+
+    pub fn register(&self, id: i64, sender: oneshot::Sender<Message>) {
+        self.promises.insert(id, sender);
+    }
+
+    pub fn start_listen(&mut self) {
+        if self.listen_fut.is_none() {
+            let fut = Self::listen_inner(self.inner.clone(), self.promises.clone());
+            self.listen_fut = Some(tokio::spawn(fut));
+        }
+    }
+
+    pub fn stop_listen(&mut self) {
+        if let Some(handle) = self.listen_fut.take() {
+            handle.abort();
+        }
     }
 }
 
