@@ -84,8 +84,7 @@ async fn main() -> anyhow::Result<()> {
         telegram::parse_config(&args.config)?,
         args.session,
         args.flood_sleep_threshold,
-    )
-    .await;
+    ).await;
 
     let mut conn = uscr::db::get_connection().await?;
 
@@ -191,9 +190,10 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Interact { peers: peers_filt } => {
             let mut peers = db::get_all_users_from_db(&mut conn).await?;
-            let filt = peers_filt.into_iter().collect::<HashSet<i64>>();
-            peers.retain(|peer| filt.contains(&peer.0.id));
-
+            {
+                let filt = peers_filt.into_iter().collect::<HashSet<i64>>();
+                peers.retain(|peer| filt.contains(&peer.0.id));
+            }
             let mut peers_by_id = HashMap::with_capacity(clients.len());
             for peer in peers {
                 if clients.contains_key(&peer.0.app_id) {
@@ -211,18 +211,14 @@ async fn main() -> anyhow::Result<()> {
                 conn: &conn,
                 stmts: [&stmt],
             };
-            let futs = clients.iter_mut().filter_map(|(id, client)| {
-                let peers = peers_by_id.remove(id)?;
-                let id = *id;
-                Some(async move {
-                    let target = format!("telegram-interact-bot({id})");
-                    client.start_listen();
-                    for peer in peers {
-                        telegram::interact_bot(client, &peer, &target, db).await;
-                    }
-                    client.stop_listen();
-                })
-            });
+            let futs = clients.iter_mut().filter_map(|(id, client)|
+                Some(telegram::interact_bot_into_future(
+                    client,
+                    peers_by_id.remove(id)?,
+                    format!("telegram-interact-bot({id})"),
+                    db,
+                ))
+            );
             futures_util::future::join_all(futs).await;
         }
     }

@@ -1,6 +1,7 @@
 pub mod client;
 mod types;
 
+use futures_util::{stream::FuturesUnordered, StreamExt};
 pub use types::BotCommand;
 
 use std::{
@@ -242,7 +243,7 @@ async fn interact_inner(
 
     let (tx, rx) = oneshot::channel();
     client.register(chat.id, tx);
-    let fut = timeout(const { Duration::from_secs(10) }, rx);
+    let fut = timeout(const { Duration::from_secs(5) }, rx);
 
     match fut.await {
         Ok(Ok(resp)) => Some(resp.raw.into()),
@@ -257,9 +258,50 @@ async fn interact_inner(
     }
 }
 
-pub async fn interact_bot(client: &Client, bot: &User, target: &str, db: DBWrapper<'_, 1>) {
-    log::info!(target: target, "======== \x1b[1;34mINTERACTING BOT \x1b[36m{}\x1b[0m ========", bot.0.id);
+pub const COMMAND_LIST: &str = "<command list>";
 
+async fn interact_bot(
+    client: &Client,
+    bot: &User,
+    target: &str,
+    db: DBWrapper<'_, 1>,
+    pre_sleep: Option<Duration>,
+) {
+    if let Some(duration) = pre_sleep {
+        tokio::time::sleep(duration).await;
+    }
+
+    log::info!(target: target, "======== \x1b[1;34mINTERACTING BOT \x1b[36m{}\x1b[0m ========", bot.0.id);
+/*
+    use tl::{
+        enums::{
+            users::UserFull as EUUserFull, BotInfo as EBotInfo, UserFull as EUserFull,
+        },
+        types::{
+            users::UserFull as TUUserFull, BotInfo as TBotInfo,
+        },
+    };
+
+    let request = tl::functions::users::GetFullUser {
+        id: tl::enums::InputUser::User(tl::types::InputUser {
+            user_id: bot.0.id,
+            access_hash: bot.0.access_hash,
+        }),
+    };
+    match client.inner.invoke(&request).await {
+        Ok(EUUserFull::Full(TUUserFull { full_user: EUserFull::Full(u), .. })) => {
+            if let Some(EBotInfo::Info(TBotInfo { commands: Some(commands), .. })) = u.bot_info {
+                let commands = commands.into_iter().map(Into::into).collect::<Vec<BotCommand>>();
+                if let Err(e) = db.conn.execute(db.stmts[0], &[&bot.0.id, &-1i32, &COMMAND_LIST, &Json(commands)]).await {
+                    log::error!(target: target, "db(insert <command list>): {e:?}");
+                }
+            } else {
+                log::warn!(target: target, "no commands registered at bot #{}", bot.0.id);
+            }
+        },
+        Err(e) => log::error!(target: target, "get commands of bot #{} failed: {e:?}", bot.0.id),
+    }
+*/
     let packed = PackedChat {
         ty: grammers_session::PackedType::Bot,
         id: bot.0.id,
@@ -279,4 +321,27 @@ pub async fn interact_bot(client: &Client, bot: &User, target: &str, db: DBWrapp
             log::error!(target: target, "db(insert /help): {e:?}");
         }
     }
+}
+
+pub async fn interact_bot_into_future(
+    client: &mut Client,
+    bots: Vec<User>,
+    target: String,
+    db: DBWrapper<'_, 1>,
+) {
+    const DIF: Duration = Duration::from_millis(3141);
+
+    client.start_listen();
+
+    let futs = FuturesUnordered::new();
+
+    let mut acc = Duration::default();
+    for bot in &bots {
+        futs.push(interact_bot(client, bot, &target, db, Some(acc)));
+        acc += DIF;
+    }
+
+    futs.collect::<()>().await;
+
+    client.stop_listen();
 }

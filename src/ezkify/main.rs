@@ -112,10 +112,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(target: "main", "start fetching ...");
     let res = client
-        .get(
-            args.url
-                .unwrap_or_else(|| format!("https://{}.com/services", args.key)),
-        )
+        .get(args.url.unwrap_or_else(|| format!("https://{}.com/services", args.key)))
         .send()
         .await?;
 

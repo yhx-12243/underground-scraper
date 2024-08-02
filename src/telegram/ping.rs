@@ -16,7 +16,7 @@ use uscr::db::DBResult;
 
 use crate::{
     db::DBWrapper,
-    telegram::{client::Client, BotCommand, Channel, User},
+    telegram::{client::Client, BotCommand, Channel, User, COMMAND_LIST},
 };
 
 pub async fn get_searched_peers(conn: &mut DBClient) -> DBResult<HashSet<UniCase<CompactString>>> {
@@ -190,7 +190,7 @@ async fn access_channel(
     ]).await?;
 
     if let Some(commands) = commands {
-        db.conn.execute(db.stmts[1], &[&id, &-1i32, &"<command list>", &Json(commands)]).await?;
+        db.conn.execute(db.stmts[1], &[&id, &-1i32, &COMMAND_LIST, &Json(commands)]).await?;
     }
 
     let peer = Channel {

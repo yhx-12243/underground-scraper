@@ -94,7 +94,6 @@ impl Worker {
             }
             for work in works {
                 let url = format!("https://www.blackhatworld.com/seo/{work}");
-                // let url = format!("https://localhost:4433/{work}");
                 log::info!(target: &target, "\x1b[33mscraping\x1b[0m {url} ...");
 
                 let response: reqwest::Result<String> = try {

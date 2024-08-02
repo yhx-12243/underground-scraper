@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use grammers_client::{
     types::Message, Client as ClientInner, Config, InitParams, SignInError, Update,
 };
-use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_mtsender::AuthorizationError;
 use grammers_session::Session;
 use hashbrown::{hash_map::DefaultHashBuilder, HashMap};
 use serde::Deserialize;
@@ -29,7 +29,7 @@ pub struct InitConfig {
 pub struct Client {
     pub inner: ClientInner,
     promises: Arc<DashMap<i64, oneshot::Sender<Message>, DefaultHashBuilder>>,
-    listen_fut: Option<JoinHandle<Result<(), InvocationError>>>,
+    listen_fut: Option<JoinHandle<()>>,
     session_path: PathBuf,
 }
 
@@ -58,7 +58,7 @@ impl Client {
         Ok((
             Self {
                 inner,
-                promises: Arc::new(DashMap::with_hasher(Default::default())),
+                promises: Arc::default(),
                 listen_fut: None,
                 session_path,
             },
@@ -127,18 +127,20 @@ impl Client {
     async fn listen_inner(
         client: ClientInner,
         promises: Arc<DashMap<i64, oneshot::Sender<Message>, DefaultHashBuilder>>,
-    ) -> Result<(), InvocationError> {
-        while let Some(update) = client.next_update().await? {
-            if let Update::NewMessage(message) = update
-                && !message.outgoing()
-                && let Some(ref peer) = message.raw.from_id
-                && let Some((_, sender)) = promises.remove(&Peer::from(peer.clone()).0)
-                && let Err(e) = sender.send(message)
-            {
-                tracing::info!(target: "telegram-listener", "error sending message: {e:?}");
+    ) {
+        loop {
+            match client.next_update().await {
+                Ok(Some(update)) => if let Update::NewMessage(message) = update
+                    && !message.outgoing()
+                    && let Some(ref peer) = message.raw.from_id
+                    && let Some((_, sender)) = promises.remove(&Peer::from(peer.clone()).0)
+                    && let Err(e) = sender.send(message) {
+                    tracing::info!(target: "telegram-listener", "error sending message: {e:?}");
+                }
+                Ok(None) => break,
+                Err(e) => tracing::info!(target: "telegram-listener", "error receiving message: {e:?}"),
             }
         }
-        Ok(())
     }
 
     pub fn register(&self, id: i64, sender: oneshot::Sender<Message>) {

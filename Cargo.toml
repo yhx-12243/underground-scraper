@@ -12,7 +12,7 @@ repository = "https://github.com/yhx-12243/underground-scraper"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 axum = "0.7.5"
 bb8-postgres = { version = "0.8.1", features = ["with-serde_json-1"] }
-bytes = { version = "1.7.0", features = ["serde"] }
+bytes = { version = "1.7.1", features = ["serde"] }
 clap = { version = "4.5.13", features = ["derive", "unicode", "wrap_help", "env", "string", "unstable-v5"] }
 clap_derive = { version = "4.5.13", features = ["unstable-v5"] }
 compact_str = { version = "0.8.0", features = ["serde"] }
@@ -36,12 +36,12 @@ parking_lot = "0.12.2"
 postgres-protocol = "0.6.7"
 pretty_env_logger = "0.5.0"
 rand = { version = "0.8.5", features = ["log", "nightly"] }
-regex = "1.10.4"
+regex = "1.10.6"
 reqwest = { version = "0.12.5", features = ["json", "native-tls-alpn"] }
 rpassword = "7.3.1"
 scraper = "0.19.1"
 serde = { version = "1.0.204", features = ["derive"] }
-serde_json = { version = "1.0.121", features = ["float_roundtrip"] }
+serde_json = { version = "1.0.122", features = ["float_roundtrip"] }
 tokio = { version = "1.39.2", features = ["macros", "parking_lot", "rt-multi-thread", "tracing"] }
 tokio-postgres = { version = "0.7.11", features = ["with-serde_json-1"] }
 tower = "0.4.13"
