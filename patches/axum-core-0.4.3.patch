@@ -65,7 +65,7 @@ index 02595fb..04d87f8 100644
      where
          S: Send + Sync,
 diff --git a/src/ext_traits/request.rs b/src/ext_traits/request.rs
-index 5b7aee7..37080b0 100644
+index 5b7aee7..0149fb9 100644
 --- a/src/ext_traits/request.rs
 +++ b/src/ext_traits/request.rs
 @@ -1,6 +1,6 @@
@@ -210,7 +210,7 @@ index 5b7aee7..37080b0 100644
      where
          E: FromRequest<S, M> + 'static,
          S: Send + Sync,
-@@ -283,40 +273,38 @@ impl RequestExt for Request {
+@@ -283,40 +273,37 @@ impl RequestExt for Request {
          E::from_request(self, state)
      }
  
@@ -251,13 +251,12 @@ index 5b7aee7..37080b0 100644
 -
 -            result
 -        })
-+        let mut parts = http::request::Parts {
-+            method: std::mem::take(self.method_mut()),
-+            uri: std::mem::take(self.uri_mut()),
-+            version: self.version(),
-+            headers: std::mem::take(self.headers_mut()),
-+            extensions: std::mem::take(self.extensions_mut()),
-+        }
++        let mut parts = Request::new(()).into_parts().0;
++        parts.version = self.version();
++        std::mem::swap(self.method_mut(), &mut parts.method);
++        std::mem::swap(self.uri_mut(), &mut parts.uri);
++        std::mem::swap(self.headers_mut(), &mut parts.headers);
++        std::mem::swap(self.extensions_mut(), &mut parts.extensions);;
 +
 +        let result = E::from_request_parts(&mut parts, state).await;
 +
@@ -271,7 +270,7 @@ index 5b7aee7..37080b0 100644
      }
  
      fn with_limited_body(self) -> Request {
-@@ -345,7 +333,6 @@ mod tests {
+@@ -345,7 +332,6 @@ mod tests {
          ext_traits::tests::{RequiresState, State},
          extract::FromRef,
      };
@@ -279,7 +278,7 @@ index 5b7aee7..37080b0 100644
      use http::Method;
  
      #[tokio::test]
-@@ -414,7 +401,6 @@ mod tests {
+@@ -414,7 +400,6 @@ mod tests {
          body: String,
      }
  

@@ -15,10 +15,36 @@ index 88a8265..e0bfccb 100644
      ///
      /// # Examples
 diff --git a/src/set.rs b/src/set.rs
-index 2125a7a..96b00ca 100644
+index 2125a7a..935972f 100644
 --- a/src/set.rs
 +++ b/src/set.rs
-@@ -2304,6 +2304,11 @@ impl<'a, T, S, A: Allocator> Entry<'a, T, S, A> {
+@@ -7,7 +7,7 @@ use core::hash::{BuildHasher, Hash};
+ use core::iter::{Chain, FusedIterator};
+ use core::ops::{BitAnd, BitOr, BitXor, Sub};
+ 
+-use super::map::{self, DefaultHashBuilder, HashMap, Keys};
++use super::map::{self, DefaultHashBuilder, HashMap, Keys, RawEntryBuilder, RawEntryBuilderMut};
+ use crate::raw::{Allocator, Global, RawExtractIf};
+ 
+ // Future Optimization (FIXME!)
+@@ -1226,6 +1226,16 @@ where
+ }
+ 
+ impl<T, S, A: Allocator> HashSet<T, S, A> {
++    #[cfg_attr(feature = "inline-more", inline)]
++    pub fn raw_entry_mut(&mut self) -> RawEntryBuilderMut<'_, T, (), S, A> {
++        self.map.raw_entry_mut()
++    }
++
++    #[cfg_attr(feature = "inline-more", inline)]
++    pub fn raw_entry(&self) -> RawEntryBuilder<'_, T, (), S, A> {
++        self.map.raw_entry()
++    }
++
+     /// Returns a reference to the [`RawTable`] used underneath [`HashSet`].
+     /// This function is only available if the `raw` feature of the crate is enabled.
+     ///
+@@ -2304,6 +2314,11 @@ impl<'a, T, S, A: Allocator> Entry<'a, T, S, A> {
  }
  
  impl<T, S, A: Allocator> OccupiedEntry<'_, T, S, A> {

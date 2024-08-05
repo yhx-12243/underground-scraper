@@ -34,9 +34,28 @@ pub fn parse_config(file: &Path) -> io::Result<Vec<InitConfig>> {
     serde_json::from_reader(reader).map_err(Into::into)
 }
 
-#[repr(transparent)]
 #[derive(Debug)]
-pub struct User(pub Channel);
+pub struct User {
+    pub peer: Channel,
+    pub hash_name: CompactString,
+}
+
+impl User {
+    #[inline]
+    fn str_is_bot(x: &[u8]) -> bool {
+        x.last_chunk::<3>().is_some_and(|last_three| last_three.eq_ignore_ascii_case(b"bot"))
+    }
+
+    pub fn maybe_bot(&self) -> bool {
+        Self::str_is_bot(self.peer.name.as_bytes()) || Self::str_is_bot(self.hash_name.as_bytes())
+    }
+}
+
+impl From<Channel> for User {
+    fn from(peer: Channel) -> Self {
+        Self { peer, hash_name: CompactString::default() }
+    }
+}
 
 #[derive(Debug)]
 pub struct Channel {
@@ -271,7 +290,7 @@ async fn interact_bot(
         tokio::time::sleep(duration).await;
     }
 
-    log::info!(target: target, "======== \x1b[1;34mINTERACTING BOT \x1b[36m{}\x1b[0m ========", bot.0.id);
+    log::info!(target: target, "======== \x1b[1;34mINTERACTING BOT \x1b[36m{}\x1b[0m ========", bot.peer.id);
 /*
     use tl::{
         enums::{
@@ -284,40 +303,40 @@ async fn interact_bot(
 
     let request = tl::functions::users::GetFullUser {
         id: tl::enums::InputUser::User(tl::types::InputUser {
-            user_id: bot.0.id,
-            access_hash: bot.0.access_hash,
+            user_id: bot.peer.id,
+            access_hash: bot.peer.access_hash,
         }),
     };
     match client.inner.invoke(&request).await {
         Ok(EUUserFull::Full(TUUserFull { full_user: EUserFull::Full(u), .. })) => {
             if let Some(EBotInfo::Info(TBotInfo { commands: Some(commands), .. })) = u.bot_info {
                 let commands = commands.into_iter().map(Into::into).collect::<Vec<BotCommand>>();
-                if let Err(e) = db.conn.execute(db.stmts[0], &[&bot.0.id, &-1i32, &COMMAND_LIST, &Json(commands)]).await {
+                if let Err(e) = db.conn.execute(db.stmts[0], &[&bot.peer.id, &-1i32, &COMMAND_LIST, &Json(commands)]).await {
                     log::error!(target: target, "db(insert <command list>): {e:?}");
                 }
             } else {
-                log::warn!(target: target, "no commands registered at bot #{}", bot.0.id);
+                log::warn!(target: target, "no commands registered at bot #{}", bot.peer.id);
             }
         },
-        Err(e) => log::error!(target: target, "get commands of bot #{} failed: {e:?}", bot.0.id),
+        Err(e) => log::error!(target: target, "get commands of bot #{} failed: {e:?}", bot.peer.id),
     }
 */
     let packed = PackedChat {
         ty: grammers_session::PackedType::Bot,
-        id: bot.0.id,
-        access_hash: (bot.0.access_hash != 0).then_some(bot.0.access_hash),
+        id: bot.peer.id,
+        access_hash: (bot.peer.access_hash != 0).then_some(bot.peer.access_hash),
     };
 
-    if let Some(resp_start) = interact_inner(client, packed.clone(), "/start", target).await {
+    if let Some(resp_start) = interact_inner(client, packed, "/start", target).await {
         let id = resp_start.id;
-        if let Err(e) = db.conn.execute(db.stmts[0], &[&bot.0.id, &id, &"/start", &Json(resp_start)]).await {
+        if let Err(e) = db.conn.execute(db.stmts[0], &[&bot.peer.id, &id, &"/start", &Json(resp_start)]).await {
             log::error!(target: target, "db(insert /start): {e:?}");
         }
     }
 
     if let Some(resp_help) = interact_inner(client, packed, "/help", target).await {
         let id = resp_help.id;
-        if let Err(e) = db.conn.execute(db.stmts[0], &[&bot.0.id, &id, &"/help", &Json(resp_help)]).await {
+        if let Err(e) = db.conn.execute(db.stmts[0], &[&bot.peer.id, &id, &"/help", &Json(resp_help)]).await {
             log::error!(target: target, "db(insert /help): {e:?}");
         }
     }

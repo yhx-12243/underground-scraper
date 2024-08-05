@@ -246,7 +246,7 @@ index fb401c0..e72c2e1 100644
  where
      InnerState: FromRef<OuterState>,
 diff --git a/src/extract/ws.rs b/src/extract/ws.rs
-index cfd10c5..1496d2f 100644
+index cfd10c5..9059d79 100644
 --- a/src/extract/ws.rs
 +++ b/src/extract/ws.rs
 @@ -93,7 +93,6 @@
@@ -276,6 +276,17 @@ index cfd10c5..1496d2f 100644
      }
  
      /// Send a message.
+@@ -485,6 +483,10 @@ impl WebSocket {
+     pub fn protocol(&self) -> Option<&HeaderValue> {
+         self.protocol.as_ref()
+     }
++
++    pub fn into_inner(self) -> (WebSocketStream<TokioIo<hyper::upgrade::Upgraded>>, Option<HeaderValue>) {
++        (self.inner, self.protocol)
++    }
+ }
+ 
+ impl Stream for WebSocket {
 diff --git a/src/form.rs b/src/form.rs
 index 966517a..f754c4c 100644
 --- a/src/form.rs

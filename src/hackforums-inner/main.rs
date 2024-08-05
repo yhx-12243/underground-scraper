@@ -68,19 +68,22 @@ async fn main() -> std::io::Result<!> {
 
     loop {
         let socket = match listener.accept().await {
-            Ok(t) => t.0,
+            Ok((socket, _)) => socket,
             Err(e) => {
                 tracing::warn!("server accept error: {e:?}");
                 continue;
             }
         };
-        let stream = TokioIo::new(socket);
 
         let app_ = app.clone();
-        tokio::spawn(http_builder.serve_connection(
-            stream,
-            hyper::service::service_fn(move |request: Request<Incoming>| app_.clone().call(request)),
-        ));
+        tokio::spawn(
+            http_builder
+                .serve_connection(
+                    TokioIo::new(socket),
+                    hyper::service::service_fn(move |request: Request<Incoming>| app_.clone().call(request)),
+                )
+                .with_upgrades(),
+        );
     }
 }
 

@@ -1,4 +1,4 @@
-use core::{fmt::Write, pin::pin};
+use core::pin::pin;
 
 use compact_str::CompactString;
 use either::Either::{self, Left, Right};
@@ -20,7 +20,10 @@ use crate::{
 };
 
 pub async fn get_searched_peers(conn: &mut DBClient) -> DBResult<HashSet<UniCase<CompactString>>> {
-    const SQL_GET: &str = "select hash from telegram.invite union all select name from telegram.channel union all select name from telegram.bots";
+    const SQL_GET: &str =
+        "select hash from telegram.invite union all \
+         select name from telegram.channel union all \
+         select name from telegram.bots";
 
     let stmt = conn.prepare_static(SQL_GET.into()).await?;
     let stream = conn.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
@@ -96,7 +99,7 @@ async fn get_description(
                 users::UserFull as EUUserFull, BotInfo as EBotInfo,
                 BotMenuButton as EBotMenuButton, UserFull as EUserFull,
             },
-            types::users::UserFull as TUUserFull,
+            types::{users::UserFull as TUUserFull, BotMenuButton as TBotMenuButton},
         };
 
         let request = tl::functions::users::GetFullUser {
@@ -110,8 +113,12 @@ async fn get_description(
                         base.push_str("\n\n");
                         base.push_str(desc);
                     }
-                    if let Some(EBotMenuButton::Button(button)) = bot_info.menu_button {
-                        let _ = write!(&mut base, "\n\n[{}]({})", button.text, button.url);
+                    if let Some(EBotMenuButton::Button(TBotMenuButton { ref text, ref url })) = bot_info.menu_button {
+                        base.push_str("\n\n[");
+                        base.push_str(text);
+                        base.push_str("](");
+                        base.push_str(url);
+                        base.push(')');
                     }
                     if let Some(commands) = bot_info.commands {
                         return (base, Some(commands.into_iter().map(Into::into).collect::<Vec<BotCommand>>()));
@@ -200,7 +207,14 @@ async fn access_channel(
         app_id: 0,
     };
 
-    Ok(if matches!(chat, User(_)) { Right(crate::telegram::User(peer)) } else { Left(peer) })
+    Ok(if matches!(chat, User(_)) {
+        Right(crate::telegram::User {
+            peer,
+            hash_name: name.into(),
+        })
+    } else {
+        Left(peer)
+    })
 }
 
 async fn access_invite(
@@ -297,9 +311,9 @@ async fn into_future(
                 channels.push(channel);
                 continue;
             }
-            Ok(Right(User(mut user))) => {
-                user.app_id = id;
-                users.push(User(user));
+            Ok(Right(mut user)) => {
+                user.peer.app_id = id;
+                users.push(user);
                 continue;
             }
             Err(e) => log::error!(target: &target_access_channel, "{e:?}"),

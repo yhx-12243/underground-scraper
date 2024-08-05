@@ -6,11 +6,9 @@ use std::{
 
 use compact_str::CompactString;
 use futures_util::TryStreamExt;
-use hashbrown::{
-    hash_set::{Entry, HashSet},
-    HashMap,
-};
+use hashbrown::{hash_map::RawEntryMut, hash_set::HashSet, HashMap};
 use tokio_postgres::{types::ToSql, Client};
+use unicase::UniCase;
 use uscr::{
     db::{get_connection, DBResult, ToSqlIter},
     util::xmax_to_success,
@@ -20,29 +18,21 @@ const fn idc(ch: u8) -> bool {
     matches!(ch, b'0'..=b'9' | b'A' ..= b'Z' | b'a' ..= b'z' | b'-' | b'_')
 }
 
-struct Saver {
-    dict: HashSet<CompactString>,
-    sf: BufWriter<File>,
-}
-
 pub struct Inspector {
-    dict: HashSet<CompactString>,
-    es: Vec<(i64, i32, CompactString)>,
-    map: HashMap<CompactString, i64>,
+    dict: HashSet<UniCase<CompactString>>,
+    es: Vec<(i64, i32, UniCase<CompactString>)>,
+    map: HashMap<UniCase<CompactString>, i64>,
 
-    saver: Saver,
+    saver: BufWriter<File>,
 }
 
 impl Inspector {
-    pub fn new(map: HashMap<CompactString, i64>, file: File) -> Self {
+    pub fn new(map: HashMap<UniCase<CompactString>, i64>, file: File) -> Self {
         Self {
             dict: HashSet::new(),
             es: Vec::new(),
             map,
-            saver: Saver {
-                dict: HashSet::new(),
-                sf: BufWriter::new(file),
-            },
+            saver: BufWriter::new(file),
         }
     }
 
@@ -83,20 +73,17 @@ impl Inspector {
                 .iter()
                 .position(|ch| !idc(*ch))
                 .unwrap_or(suffix.len());
-            let mut result =
+            let result = UniCase::new(
                 // SAFETY: suffix[len] is ASCII, which is UTF-8 boundary.
-                unsafe { CompactString::from_utf8_unchecked(suffix.get_unchecked(..len)) };
+                unsafe { CompactString::from_utf8_unchecked(suffix.get_unchecked(..len)) }
+            );
 
-            match self.dict.entry(result) {
-                Entry::Occupied(e) => result = e.into_key().unwrap(),
-                Entry::Vacant(e) => #[allow(clippy::assigning_clones)] {
-                    let prefix =
-                        // SAFETY: the position of suffix is UTF-8 boundary.
-                        unsafe { text.get_unchecked(idx..suffix.as_ptr().sub_ptr(text.as_ptr())) };
-                    tracing::info!(target: "telegram-extractor", "found: https://\x1b[33m{}\x1b[36m{}\x1b[0m", prefix, e.get());
-                    result = e.get().clone();
-                    e.insert();
-                }
+            if let RawEntryMut::Vacant(e) = self.dict.raw_entry_mut().from_key(&result) {
+                let prefix =
+                    // SAFETY: the position of suffix is UTF-8 boundary.
+                    unsafe { text.get_unchecked(idx..suffix.as_ptr().sub_ptr(text.as_ptr())) };
+                tracing::info!(target: "telegram-extractor", "found: https://\x1b[33m{prefix}\x1b[36m{result}\x1b[0m");
+                e.insert(result.clone(), ());
             }
 
             self.es.push((channel_id, message_id, result));
@@ -113,10 +100,9 @@ impl Inspector {
                     if channel_id != id2 { // self reference
                         batch.push((channel_id, message_id, id2));
                     }
-                } else if let Entry::Vacant(entry) = self.saver.dict.entry(result.clone()) {
-                    let _ = self.saver.sf.write_all(entry.get().as_bytes());
-                    let _ = self.saver.sf.write_all(b"\n");
-                    entry.insert();
+                } else {
+                    let _ = self.saver.write_all(result.as_bytes());
+                    let _ = self.saver.write_all(b"\n");
                 }
             }
         }
@@ -152,10 +138,7 @@ impl Inspector {
 
         let mut cnt = 0;
         while let Some(row) = stream.try_next().await? {
-            if let Ok(channel_id) = row.try_get(0)
-                && let Ok(message_id) = row.try_get(1)
-                && let Ok(content) = row.try_get(2)
-            {
+            if let Ok(channel_id) = row.try_get(0) && let Ok(message_id) = row.try_get(1) && let Ok(content) = row.try_get(2) {
                 self.inspect(channel_id, message_id, content);
             }
             cnt += 1;
@@ -169,18 +152,22 @@ impl Inspector {
     }
 }
 
-pub async fn generate_user_id_map(conn: &mut Client) -> DBResult<HashMap<CompactString, i64>> {
-    const SQL: &str = "select channel_id, hash from telegram.invite union all select id, name from telegram.channel union all select id, name from telegram.bots";
+pub async fn generate_user_id_map(
+    conn: &mut Client,
+) -> DBResult<HashMap<UniCase<CompactString>, i64>> {
+    const SQL: &str =
+        "select channel_id, hash from telegram.invite union all \
+         select id, name from telegram.channel union all \
+         select id, name from telegram.bots";
 
     let stmt = conn.prepare_static(SQL.into()).await?;
-    let rows = conn.query(&stmt, &[]).await?;
-
-    Ok(rows
-        .into_iter()
-        .filter_map(|row| {
-            let id = row.try_get(0).ok()?;
-            let name = row.try_get::<_, &str>(1).ok()?;
-            Some((name.into(), id))
-        })
-        .collect())
+    let stream = conn.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
+    let mut stream = pin!(stream);
+    let mut result = HashMap::new();
+    while let Some(row) = stream.try_next().await? {
+        let id = row.try_get(0)?;
+        let name = row.try_get::<_, &str>(1)?;
+        result.insert(UniCase::new(CompactString::new(name)), id);
+    }
+    Ok(result)
 }

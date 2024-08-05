@@ -52,10 +52,10 @@ where
     let mut N = 0;
     for user in users {
         match txn.execute(&stmt, &[
-            &user.0.id,
-            &&*user.0.name,
-            &user.0.access_hash,
-            &user.0.app_id,
+            &user.peer.id,
+            &&*user.peer.name,
+            &user.peer.access_hash,
+            &user.peer.app_id,
         ]).await {
             Ok(r) => n += r,
             Err(e) => tracing::error!(target: "telegram-insert-user", ?e),
@@ -94,9 +94,9 @@ pub fn get_all_channels_from_db(conn: &mut Client) -> impl Future<Output = DBRes
     get_all_peers_from_db_inner("select id, name, access_hash, app_id from telegram.channel order by last_fetch", conn)
 }
 
-pub async fn get_all_users_from_db(conn: &mut Client) -> DBResult<Vec<User>> {
+pub async fn get_all_bots_from_db(conn: &mut Client) -> DBResult<Vec<User>> {
     match get_all_peers_from_db_inner("select id, name, access_hash, app_id from telegram.bots", conn).await {
-        Ok(r) => Ok(r.into_iter().map(User).collect()),
+        Ok(r) => Ok(r.into_iter().map(Into::into).collect()),
         Err(e) => Err(e),
     }
 }

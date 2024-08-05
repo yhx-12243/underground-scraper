@@ -19,7 +19,7 @@ compact_str = { version = "0.8.0", features = ["serde"] }
 const_format = "0.2.32"
 dashmap = { version = "6.0.1", features = ["inline", "raw-api"] }
 either = "1.13.0"
-fantoccini = "0.21.0"
+fantoccini = "0.21.1"
 futures-util = "0.3.30"
 grammers-client = { git = "https://github.com/Lonami/grammers", features = ["parse_invite_link", "proxy"] }
 grammers-mtsender = { git = "https://github.com/Lonami/grammers" }

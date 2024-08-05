@@ -125,13 +125,15 @@ async fn main() -> anyhow::Result<()> {
                     channels.insert(channel.id, channel);
                 }
                 for user in z_users {
-                    users.insert(user.0.id, user);
+                    users.insert(user.peer.id, user);
                 }
             }
 
             tracing::info!("{channels:#?}");
             db::insert_channels(channels.into_values(), &mut conn).await?;
-            db::insert_users(users.into_values(), &mut conn).await?;
+
+            tracing::info!("{users:#?}");
+            db::insert_users(users.into_values().filter(telegram::User::maybe_bot), &mut conn).await?;
         }
         Commands::Content { channels: channels_filt, limit } => {
             let mut channels = db::get_all_channels_from_db(&mut conn).await?;
@@ -189,20 +191,20 @@ async fn main() -> anyhow::Result<()> {
             inspector.extract_content(&mut conn).await?;
         }
         Commands::Interact { peers: peers_filt } => {
-            let mut peers = db::get_all_users_from_db(&mut conn).await?;
+            let mut peers = db::get_all_bots_from_db(&mut conn).await?;
             {
                 let filt = peers_filt.into_iter().collect::<HashSet<i64>>();
-                peers.retain(|peer| filt.contains(&peer.0.id));
+                peers.retain(|peer| filt.contains(&peer.peer.id));
             }
             let mut peers_by_id = HashMap::with_capacity(clients.len());
             for peer in peers {
-                if clients.contains_key(&peer.0.app_id) {
+                if clients.contains_key(&peer.peer.app_id) {
                     peers_by_id
-                        .entry(peer.0.app_id)
+                        .entry(peer.peer.app_id)
                         .or_insert_with(Vec::new)
                         .push(peer);
                 } else {
-                    tracing::warn!(target: "telegram-before-interact", "app_id {} not found", peer.0.app_id);
+                    tracing::warn!(target: "telegram-before-interact", "app_id {} not found", peer.peer.app_id);
                 }
             }
 
