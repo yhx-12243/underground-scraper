@@ -11,7 +11,7 @@
 	\title{Scraping and data analysis about Underground markets and Telegram}
 	\author{Haoxiang Yu}
 	\institute{Tsinghua University (intern at CyLab, CMU)}
-	\setdate{2024}{6}{25}
+	\setdate{2024}{8}{6}
 
 	\maketitle
 
@@ -30,24 +30,24 @@
 	\subsection{Introduction}
 
 	\frame {
-		\noindent\hskip-1.5em Underground markets\pause$\begin{cases}
+		\noindent\hskip-2em Underground markets\pause$\begin{cases}
 			\text{AccsMarket} &
 				\uncover<5->{\begin{cases}
-					\text{108k tuples} \\
+					\text{180k tuples} \\
 					\uncover<6->{\text{from Mar 25 to now, regularly}}\hskip-6em\\
 					\uncover<7->{\text{Provider analysis, trends}}\hskip-6em
 				\end{cases}}\pause\\
-			\text{EZKIFY Services}\!\!\!\!&
+			\text{EZKIFY Services}\hskip-4em\!&
 				\uncover<8->{\begin{cases}
-					\text{308k tuples} \\
+					\text{972k tuples w/ various submarket}\hskip-12em\\
 					\uncover<9->{\text{from Mar 25 to now, regularly}}\hskip-6em\\
 					\uncover<10->{\text{Detailed description}}
 				\end{cases}}\pause\\
-			\text{BlackHatWorld} &
+			\text{BlackHatWorld}\!\!\!&
 				\uncover<11->{\begin{cases}
-					\text{585k posts} \\
+					\text{589k posts} \\
 					\uncover<12->{\text{with complete post content}}\hskip-6em\\
-					\uncover<13->{\text{Across various forms}}
+					\uncover<13->{\text{Across various forums}}
 				\end{cases}}
 		\end{cases}$
 	}
@@ -308,7 +308,7 @@ export RUST_LOG=info
 	\frame {
 		\begin{figure}
 			\centering
-			\includegraphics[scale=.14]{assets/tgh.png}
+			\includegraphics[scale=.28]{assets/tgh.png}
 			\caption{\# (frequency) of channels with messages count in this interval}
 		\end{figure}
 	}
@@ -327,6 +327,136 @@ export RUST_LOG=info
 			\centering
 			\includegraphics[scale=.12]{assets/tgdm.png}
 			\caption{\# of domains appears in Bot buttons with domain ranking in this interval}
+		\end{figure}
+	}
+
+	\subsection{Updates on July}
+
+	\subsubsection{A New Roadmap: Inclusion of BOTS!}
+
+	\frame {
+		Telegram peers $\begin{cases}
+			\text{Users (include bots)}\\
+			\text{\color{green!80!black}Groups}\\
+			\text{\color{green!80!black}Channels} \\
+		\end{cases}$
+
+		\begin{tikzpicture}
+			\useasboundingbox (0, 0) rectangle (1pt, 1pt);
+			\alt<2->{
+				\node[draw=green!80!black, inner sep=3pt, rotate=15, fill=white, text=green!80!black, fill opacity=.5, text opacity=1] at (4.5, 2.4) {Possible for BOTS!};
+			}{
+				\node[draw=red, inner sep=3pt, rotate=15, fill=white, text=red, fill opacity=.5, text opacity=1] at (4.5, 1.8) {Impossible};
+			}
+			\temporal<3-5>{}{
+				\node at (8.2, 1.8) {$\begin{cases}
+					\text{About/Description} \\
+					\uncover<4->{\text{Commands List}} \\
+					\uncover<5->{\text{Simple Interaction}} \\
+				\end{cases}$};
+			}{
+				\node[draw=fuchsia, semithick, inner sep=1pt] (dbt) at (8.2, 1.8) {$\begin{cases}
+					\text{About/Description} \\
+					\uncover<4->{\text{Commands List}} \\
+					\uncover<5->{\text{Simple Interaction}} \\
+				\end{cases}$};
+				\draw[->, semithick, fuchsia] (dbt) -- +(0, -3.2);
+			}
+			\only<7->{
+				\node[inner sep=3pt, blue] (large) at (6.5, -2.45) {Possibly the largest};
+				\draw[->, blue] (large) -- +(0, .65);
+			}
+		\end{tikzpicture}
+
+		\noindent\hskip-1em Dataset in \includegraphics[scale=.02]{assets/database.png} \small$\begin{cases}
+			\text{pushshift (20k+ channels, $\sim$200M messages)}\\
+			\text{TGDataset (121k channels, $\sim$500M messages) \color{gray}$\gets$ less detailed\hskip-4em\!}\\
+			\text{Our own dataset \alt<6->{\textcolor{red}{(120k+ channels, 28k+ bots, $\sim$800M msgs)}\hskip-7em\!}{(2k+ channels, $\sim$10M messages)}}
+		\end{cases}$
+
+	}
+
+	\subsubsection{Inside our 28k bots ...}
+
+	\frame {
+		\centerline{
+			\begin{tabular}{|c|c|c|c|c|c|}
+				\hline
+					& Total & With desc & Has cmd list & Responsive & Alive\footnote{\textit{Has command list} or \textit{Responsive}.} \\
+				\hline\hline
+					\parbox[c][24pt]{56pt}{\centering Total}
+						& 28\,140
+						& \parbox{36pt}{\centering18\,789\\[-3pt]\footnotesize\color{fuchsia}(66.77\%)}
+						& \parbox{36pt}{\centering7\,921\\[-3pt]\footnotesize\color{fuchsia}(28.15\%)}
+						& \parbox{36pt}{\centering7\,375\\[-3pt]\footnotesize\color{fuchsia}(26.21\%)}
+						& \parbox{36pt}{\centering13\,058\\[-3pt]\footnotesize\color{fuchsia}(46.40\%)} \\
+				\hline
+					\parbox[c][24pt]{56pt}{\centering Referenced\footnote{Has mentions/links at our billion message database.}}\alt<2->{%
+						& 17\,841
+						& \parbox{36pt}{\centering12\,093\\[-3pt]\footnotesize\color{fuchsia}(67.78\%)}
+						& \parbox{36pt}{\centering4\,926\\[-3pt]\footnotesize\color{fuchsia}(27.61\%)}
+						& \parbox{36pt}{\centering3\,689\\[-3pt]\footnotesize\color{fuchsia}(20.68\%)}
+						& \parbox{36pt}{\centering7\,359\\[-3pt]\footnotesize\color{fuchsia}(41.25\%)}
+					}{&\multicolumn4c{}&}\\
+				\hline
+					\parbox[c][24pt]{56pt}{\footnotesize Telegram Bots Directory}\alt<3->{%
+						& 1\,197
+						& \parbox{36pt}{\centering866\\[-3pt]\footnotesize\color{fuchsia}(72.35\%)}
+						& \parbox{36pt}{\centering652\\[-3pt]\footnotesize\color{fuchsia}(54.47\%)}
+						& \parbox{36pt}{\centering200\\[-3pt]\footnotesize\color{fuchsia}(16.71\%)}
+						& \parbox{36pt}{\centering708\\[-3pt]\footnotesize\color{fuchsia}(59.15\%)}
+					}{&\multicolumn4c{}&}\\
+				\hline
+					\parbox[c][24pt]{56pt}{\centering TGBots.io}\alt<4->{%
+						& 240
+						& \parbox{36pt}{\centering219\\[-3pt]\footnotesize\color{fuchsia}(91.25\%)}
+						& \parbox{36pt}{\centering120\\[-3pt]\footnotesize\color{fuchsia}(50.00\%)}
+						& \parbox{36pt}{\centering35\\[-3pt]\footnotesize\color{fuchsia}(14.58\%)}
+						& \parbox{36pt}{\centering139\\[-3pt]\footnotesize\color{fuchsia}(57.92\%)}
+					}{&\multicolumn4c{}&}\\
+				\hline
+					\parbox[c][24pt]{31pt}{\footnotesize Telegram Bot List}\alt<5->{%
+						& 62
+						& \parbox{36pt}{\centering55\\[-3pt]\footnotesize\color{fuchsia}(88.71\%)}
+						& \parbox{36pt}{\centering41\\[-3pt]\footnotesize\color{fuchsia}(66.13\%)}
+						& \parbox{36pt}{\centering21\\[-3pt]\footnotesize\color{fuchsia}(33.87\%)}
+						& \parbox{36pt}{\centering45\\[-3pt]\footnotesize\color{fuchsia}(72.58\%)}
+					}{&\multicolumn4c{}&}\\
+				\hline
+					\parbox[c][24pt]{56pt}{\centering tgdr.io}\alt<6->{%
+						& 82
+						& \parbox{36pt}{\centering75\\[-3pt]\footnotesize\color{fuchsia}(91.46\%)}
+						& \parbox{36pt}{\centering57\\[-3pt]\footnotesize\color{fuchsia}(69.51\%)}
+						& \parbox{36pt}{\centering38\\[-3pt]\footnotesize\color{fuchsia}(46.34\%)}
+						& \parbox{36pt}{\centering63\\[-3pt]\footnotesize\color{fuchsia}(76.83\%)}
+					}{&\multicolumn4c{}&}\\
+				\hline
+					\parbox[c][24pt]{56pt}{\centering telega.io}\alt<7->{%
+						& 177
+						& \parbox{36pt}{\centering153\\[-3pt]\footnotesize\color{fuchsia}(86.44\%)}
+						& \parbox{36pt}{\centering114\\[-3pt]\footnotesize\color{fuchsia}(64.41\%)}
+						& \parbox{36pt}{\centering59\\[-3pt]\footnotesize\color{fuchsia}(33.33\%)}
+						& \parbox{36pt}{\centering128\\[-3pt]\footnotesize\color{fuchsia}(72.32\%)}
+					}{&\multicolumn4c{}&}\\
+				\hline
+			\end{tabular}
+		}
+	}
+
+	\subsubsection{Reference distribution}
+
+	\frame {
+		\begin{figure}[htb]
+			\begin{minipage}{.49\linewidth}
+				\centering
+				\hskip-2.5em\includegraphics[scale=.6]{assets/botref.pdf}
+				\caption{\# of bots with total references count in this interval}
+			\end{minipage}
+			\begin{minipage}{.49\linewidth}
+				\centering
+				\hskip-0.5em\includegraphics[scale=.6]{assets/botref2.pdf}
+				\caption{\# of bots with (the \rlap{number}\\of the channels who references it) \rlap{in} this interval}
+			\end{minipage}
 		\end{figure}
 	}
 \fi
@@ -388,11 +518,11 @@ export RUST_LOG=info
 			}
 			\only<6->{
 				\node[draw, inner sep=2pt] (telPing) at (1.5, -2) {\texttt{\small./telegram ping -c Alice Bob ...}};
-				\draw[->, dotted] (telPing) -- (1.5, -0.75);
+				\draw[->, dotted] (telPing) -- (1.5, -0.75); % FIRST COMMAND !
 			}
 			\only<7->{
 				\node[draw, inner sep=2pt, fuchsia] (telContent) at (4.6, -2.6) {\texttt{\small./telegram content}};
-				\draw[->, dotted, fuchsia] (telContent) -- (4.6, 0);
+				\draw[->, dotted, fuchsia] (telContent) -- (4.6, 0); % SECOND COMMAND !
 			}
 			\only<8-> {
 				\node[draw, inner sep=3pt, blue] (urls) at (9, 1) {URLs};
@@ -403,8 +533,8 @@ export RUST_LOG=info
 				\draw[->, blue] (urls) -- node[midway, auto, inner sep=1pt] {extract} (tiUrls);
 			}
 			\only<10->{
-				\node[draw, inner sep=2pt, blue] (telex) at (8, -2) {\texttt{\small./telegram extract}};
-				\draw[->, dotted, blue] (telex) -- (8, 0.9);
+				\node[draw, inner sep=2pt, blue] (telEx) at (8, -2) {\texttt{\small./telegram extract}};
+				\draw[->, dotted, blue] (telEx) -- (8, 0.9); % THIRD COMMAND !
 			}
 			\only<11->{ % snowball
 				\draw[->, semithick, blue] (tiUrls) -- (idList);
@@ -555,6 +685,126 @@ export RUST_LOG=info
 		\end{tikzpicture}
 	}
 
+	\subsection{Updates on July}
+
+	\subsubsection{A New Roadmap: Playing with BOTS}
+
+	\frame {
+		\begin{tikzpicture}
+			\useasboundingbox (0, 0) rectangle (1pt, 1pt);
+			\node (tg) at (4.6, 2.6) {\includegraphics[scale=.125]{assets/telegram.png}};
+
+			\node[draw, align=left, inner sep=3pt] (idList) at (0, 0) {ID list\\[-4pt]\footnotesize Alice\\[-6pt]\footnotesize Bob\\[-8pt]\footnotesize\dots};
+
+			\node[draw, align=center, inner sep=3pt] (ah) at (3, -1) {access\\[-6pt]hashes};
+			\alt<1>{\draw[->, thick, red] (idList) -- (ah);}{\draw[->] (idList) -- (ah);}
+			\draw[->] (tg) to[bend right=15] (1.5, -0.5); % aux
+
+			\node[draw, inner sep=3pt, fuchsia] (msgs) at (6, 1) {messages};
+			\draw[->, fuchsia] (idList) -- (msgs);
+			\draw[->, fuchsia] (ah) -- (msgs);
+			\draw[->, fuchsia] (tg) -- (4.6, .7666667); % aux
+			\draw[->, fuchsia] (4.6, .7666667) -- +(0, -.7);
+
+			\node[draw, inner sep=3pt, blue] (urls) at (9, 1) {URLs};
+			\draw[->, blue] (msgs) -- node[midway, auto, inner sep=1pt] {parser} (urls);
+
+			\node[draw, inner sep=3pt, blue] (tiUrls) at (9, -1) {\small Telegram invitation URLs};
+			\draw[->, blue] (urls) -- node[midway, auto, inner sep=1pt] {extract} (tiUrls);
+
+			\draw[->, blue] (tiUrls) -- (idList);
+
+			\only<1>{
+				\node[draw, align=left, inner sep=3pt, red] (h1) at (0.666667, 1.666667) {\footnotesize tightest pipe restriction:\\[-6pt]\footnotesize200 usernames daily};
+				\draw[->, red] (h1) -- (1.4, -0.4);
+
+				\node[draw, align=left, inner sep=3pt, green!80!black] (prx) at (1, -2) {\footnotesize Use 100+ different\\[-6pt]\footnotesize accounts with proxy};
+				\draw[->, green!80!black] (prx) -- (1.4, -0.6);
+			}
+
+			\node[draw, dashed, inner sep=3pt, properpurple] (ps) at (6.2, 2.5) {pushshift};
+			\node[draw, dashed, inner sep=3pt, properpurple] (td) at (8.5, 2.5) {TGDataset};
+			\draw[->, properpurple] (ps) -- (urls);
+			\draw[->, properpurple] (td) -- (urls);
+
+			\only<2->{
+				\node[maroon] at (0.8, 2.8) {\large Playing with BOTS!};
+			}
+
+			\only<3->{
+				\node[draw, align=center, inner sep=2pt, maroon] (botDesc) at (6.9, 0) {\footnotesize Bot About/Description\\[-6pt]\footnotesize Commands List};
+
+				\draw[->, maroon] (ah) -- (botDesc);
+				\alt<5->{
+					\draw[->, maroon] (0.604398, -0.0666667) -- +(4.647991, 0);
+					\draw[->, maroon] (tg) -- (4.6, -0.0666667); % aux
+					\draw[->, maroon] (4.6, -0.0666667) -- +(0, -.523077);
+				}{
+					\draw[->, maroon] (idList) -- (botDesc);
+					\draw[->, maroon] (tg) -- (4.6, 0); % aux
+					\draw[->, maroon] (4.6, 0) -- +(0, -.589744);
+				}
+			}
+
+			\only<4>{
+				\draw[semithick, rounded corners, blue] (5.3, 0) rectangle (8.5, 0.333333);
+				\draw[->, dashed, blue] (8, 0.333333) -- (urls);
+				\draw[->, dashed, blue] (8, 0.333333) to[bend right=10] (idList);
+			}
+
+			\only<5->{
+				\draw[->, blue] (botDesc) -- (urls);
+				\draw[->, blue] (5.252389, 0.0666667) -- +(-4.647991, 0);
+				\draw[->, dashed, gray] (ps) -- (botDesc);
+				\draw[->, dashed, gray] (td) -- (botDesc);
+				\node[red] at (6.41, 1.75) {\large$\times$};
+				\node[red] at (8.02, 1.75) {\large$\times$};
+				\node[red] at (7.26, 2) {\scriptsize No\,prior\,data!};
+			}
+
+			\only<6->{
+				\draw[semithick, rounded corners, aqua!80!black] (-0.55, 0.3) rectangle (0.55, 0.75) (5.8, -0.35) rectangle (8, -0.05);
+				\node[draw, align=center, inner sep=3pt, aqua!80!black] (interResults) at (6.25, -2) {Interaction\\[-6pt]Results};
+				\draw[->, aqua!80!black] (0.55, 0.525) to[bend left=15] (interResults);
+				\draw[->, aqua!80!black] (6.9, -0.35) -- (interResults);
+			}
+
+			\only<7-> {
+				\node[draw, inner sep=2pt, aqua!80!black] (telInt) at (1.85, 1.7) {\texttt{\footnotesize./telegram interact -p AliceBot BobBot ...}};
+				\draw[->, dotted, aqua!80!black] (telInt) -- (1.85, 0.4); % FOURTH COMMAND !
+			}
+
+			\only<8-> {
+				\node[draw, inner sep=3pt, properpurple] (cat) at (3, -2.25) {Categories};
+				\draw[->, properpurple] (interResults) -- (cat);
+
+				\node[inner sep=1pt, green!80!black] (gpt) at (4.5, -3.5) {GPT4o};
+				\draw[->, properpurple] (gpt) -- (4.5, -2.134615);
+			}
+
+			\only<9->{
+				\node[inner sep=5pt, fill=white, text=black, fill opacity=.833333, text opacity=1] at (4.6, 1) {\small\begin{tabular}{|c|c|c|c|c|}
+					\hline
+						Adult & Admin Tools & AI & Analytics & \!\!\!Communication\!\!\! \\
+					\hline
+						\!\!\!Cryptocurrency\!\!\! & Design & Developer Tools & Education & Finance \\
+					\hline
+						Fitness & Fun and Games & Health & Languages & Music \\
+					\hline
+						News & Personal & Photo \& Video & Shopping & Social Media \\
+					\hline
+						Sports & TV Series/Movies & Utilities & & \\
+					\hline
+				\end{tabular}};
+
+				\draw[semithick, properpurple] (cat.north west) -- (-1.67, -0.3) (cat.north east) -- (10.87, -0.3);
+				\node[draw, inner sep=3pt, properpurple] (analysis) at (0, -2.25) {Analysis};
+				\draw[->, properpurple] (cat) -- (analysis);
+			}
+
+
+		\end{tikzpicture}
+	}
 \fi
 	% \bibliographystyle{alpha}
 
