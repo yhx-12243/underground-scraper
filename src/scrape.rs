@@ -1,8 +1,13 @@
-use std::{ffi::OsStr, sync::Arc, time::Duration};
+use std::{ffi::OsStr, mem::ManuallyDrop, sync::Arc, time::Duration};
 
-use headless_chrome::{browser::tab::NoElementFound, Browser, Element, LaunchOptions, Tab};
+use headless_chrome::{
+    browser::tab::NoElementFound, protocol::cdp::Runtime, Browser, Element, LaunchOptions, Tab,
+};
 use serde_json::Value;
-use tokio::{task::block_in_place, time::sleep};
+use tokio::{
+    task::{block_in_place, spawn_blocking},
+    time::sleep,
+};
 
 pub const USER_AGENTS: [&str; 19] = [
 	"Mozilla/5.0 (Linux; Android 8.1.0; Moto G (4)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 PTST/240201.144844",
@@ -42,6 +47,7 @@ pub fn puppeteer(headless: bool, proxy: Option<String>) -> anyhow::Result<Browse
     })
 }
 
+#[allow(clippy::significant_drop_tightening)]
 pub fn first_tab(browser: &Browser) -> anyhow::Result<Arc<Tab>> {
     let tabs_guard = browser
         .get_tabs()
@@ -59,7 +65,7 @@ pub fn first_tab(browser: &Browser) -> anyhow::Result<Arc<Tab>> {
 }
 
 pub async fn wait_for_async<'tab>(tab: &'tab Tab, selector: &str) -> anyhow::Result<Element<'tab>> {
-    const PERIOD: Duration = Duration::from_millis(1832);
+    const PERIOD: Duration = Duration::from_millis(1832 / 4);
 
     loop {
         match block_in_place(|| tab.find_element(selector)) {
@@ -76,11 +82,29 @@ pub async fn wait_for_async<'tab>(tab: &'tab Tab, selector: &str) -> anyhow::Res
 }
 
 pub async fn inner_html(element: &Element<'_>) -> anyhow::Result<String> {
-    let ret = block_in_place(
-        || element.call_js_fn("function() { return this.innerHTML }", Vec::new(), false)
-    )?;
+    let tab = {
+        let tab = ManuallyDrop::new(unsafe { Arc::from_raw(core::ptr::from_ref(element.parent)) });
+        Arc::clone(&tab)
+    };
+    let remote_object_id = element.remote_object_id.clone();
 
-    match ret.value {
+    let ret = spawn_blocking(move ||
+        tab.call_method(Runtime::CallFunctionOn {
+            object_id: Some(remote_object_id),
+            function_declaration: "function(){return this.innerHTML}".to_owned(),
+            arguments: Some(Vec::new()),
+            return_by_value: Some(false),
+            generate_preview: Some(true),
+            silent: Some(false),
+            await_promise: Some(false),
+            user_gesture: None,
+            execution_context_id: None,
+            object_group: None,
+            throw_on_side_effect: None,
+        })
+    ).await??;
+
+    match ret.result.value {
         Some(Value::String(s)) => Ok(s),
         Some(value) => anyhow::bail!("not a string: {value}"),
         None => anyhow::bail!("returned nothing"),

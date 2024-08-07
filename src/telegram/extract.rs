@@ -75,7 +75,7 @@ impl Inspector {
                 .unwrap_or(suffix.len());
             let result = UniCase::new(
                 // SAFETY: suffix[len] is ASCII, which is UTF-8 boundary.
-                unsafe { CompactString::from_utf8_unchecked(suffix.get_unchecked(..len)) }
+                unsafe { CompactString::from_utf8_unchecked(suffix.get_unchecked(..len)) },
             );
 
             if let RawEntryMut::Vacant(e) = self.dict.raw_entry_mut().from_key(&result) {

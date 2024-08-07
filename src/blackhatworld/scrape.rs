@@ -1,5 +1,7 @@
 use std::{
-    ops::ControlFlow, sync::Arc, time::{Duration, SystemTime}
+    ops::ControlFlow,
+    sync::Arc,
+    time::{Duration, SystemTime},
 };
 
 use headless_chrome::Tab;
@@ -7,7 +9,9 @@ use regex::Regex;
 use scraper::{Html, Selector};
 use tokio::task;
 use uscr::{
-    db::{get_connection, BB8Error, ToSqlIter}, scrape, util::xmax_to_success
+    db::{get_connection, BB8Error, ToSqlIter},
+    scrape,
+    util::xmax_to_success,
 };
 
 pub struct Context {
