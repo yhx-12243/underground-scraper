@@ -204,7 +204,7 @@ The server also has the functions like "load balancing", different scrapers (wor
 
 ##### Usage
 
-We can use `./hackforums-inner` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward (like NGINX) it to a TCP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/hackforums-inner/main.rs#L56)[^1].
+We can use `./blackhatworld-server` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward (like NGINX) it to a TCP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/blackhatworld-server/main.rs#L56)[^1].
 
 [^1]: Anyway, as long as one can access the server in the same manner (TCP port / socket), then it will work. For example, the `blackhatworld-worker` uses the TCP port 18322 in localhost.
 

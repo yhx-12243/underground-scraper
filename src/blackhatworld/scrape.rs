@@ -1,18 +1,17 @@
 use std::{
-    ops::ControlFlow,
-    time::{Duration, SystemTime},
+    ops::ControlFlow, sync::Arc, time::{Duration, SystemTime}
 };
 
-use fantoccini::{Client as Driver, Locator};
+use headless_chrome::Tab;
 use regex::Regex;
 use scraper::{Html, Selector};
+use tokio::task;
 use uscr::{
-    db::{get_connection, BB8Error, ToSqlIter},
-    util::xmax_to_success,
+    db::{get_connection, BB8Error, ToSqlIter}, scrape, util::xmax_to_success
 };
 
 pub struct Context {
-    pub driver: Driver,
+    pub tab: Arc<Tab>,
     pub cfg: (&'static str, i64),
     pub reg_id: Regex,
     pub sel_struct_item: Selector,
@@ -45,18 +44,17 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
         ctx.cfg.0, ctx.cfg.1,
     );
 
-    if let Err(e) = ctx.driver.goto(&url).await {
+    if let Err(e) = task::block_in_place(|| ctx.tab.navigate_to(&url)) {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
         return ControlFlow::Continue(());
     }
 
-    let locator = Locator::Css(".js-threadList");
-    if let Err(e) = ctx.driver.wait().forever().for_element(locator).await {
+    if let Err(e) = scrape::wait_for_async(&ctx.tab, ".js-threadList").await {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
         return ControlFlow::Continue(());
     }
 
-    let list = match ctx.driver.find(Locator::Css(".structItemContainer")).await {
+    let list = match task::block_in_place(|| ctx.tab.find_element(".structItemContainer")) {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
@@ -64,7 +62,7 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
         }
     };
 
-    let html = match list.html(false).await {
+    let html = match scrape::inner_html(&list).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");

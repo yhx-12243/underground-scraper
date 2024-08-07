@@ -46,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    let client = uscr::scrape::basic()?;
+    let client = uscr::scrape::simple()?;
 
     match args.command {
         Commands::Config { port } => {
@@ -55,21 +55,7 @@ async fn main() -> anyhow::Result<()> {
                 PROXY_HOST.map(|host| format!("http://{host}:{port}")),
             )?;
 
-            let tab = {
-                let tabs_guard = browser
-                    .get_tabs()
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let (first, remains) = tabs_guard
-                    .split_first()
-                    .ok_or_else(|| anyhow::anyhow!("no tabs found"))?;
-
-                for remain in remains {
-                    remain.close(true)?;
-                }
-
-                first.clone()
-            };
+            let tab = uscr::scrape::first_tab(&browser)?;
 
             let user_agent = {
                 use rand::seq::SliceRandom;

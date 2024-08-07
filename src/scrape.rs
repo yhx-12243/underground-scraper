@@ -1,7 +1,8 @@
-use std::ffi::OsStr;
+use std::{ffi::OsStr, sync::Arc, time::Duration};
 
-use fantoccini::{error::NewSessionError, Client, ClientBuilder};
-use headless_chrome::{Browser, LaunchOptions};
+use headless_chrome::{browser::tab::NoElementFound, Browser, Element, LaunchOptions, Tab};
+use serde_json::Value;
+use tokio::{task::block_in_place, time::sleep};
 
 pub const USER_AGENTS: [&str; 19] = [
 	"Mozilla/5.0 (Linux; Android 8.1.0; Moto G (4)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 PTST/240201.144844",
@@ -26,35 +27,10 @@ pub const USER_AGENTS: [&str; 19] = [
 	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 ];
 
-pub fn basic() -> reqwest::Result<reqwest::Client> {
+pub fn simple() -> reqwest::Result<reqwest::Client> {
     reqwest::Client::builder()
         .connect_timeout(const { core::time::Duration::from_secs(5) })
         .build()
-}
-
-pub async fn get_driver(headless: bool) -> Result<Client, NewSessionError> {
-    use serde_json::Value::{Array, Object, String};
-
-    let mut builder = ClientBuilder::native();
-    let mut options = Vec::new();
-    options.push(String("--disable-blink-features=AutomationControlled".to_owned()));
-    if headless {
-        options.push(String("--headless".to_owned()));
-    }
-    builder.capabilities(
-        #[allow(clippy::iter_on_single_items)]
-        Some((
-            "goog:chromeOptions".to_owned(),
-            Object(
-                Some(("args".to_owned(), Array(options)))
-                    .into_iter()
-                    .collect(),
-            ),
-        ))
-        .into_iter()
-        .collect(),
-    );
-    builder.connect("http://localhost:9515").await
 }
 
 pub fn puppeteer(headless: bool, proxy: Option<String>) -> anyhow::Result<Browser> {
@@ -64,4 +40,49 @@ pub fn puppeteer(headless: bool, proxy: Option<String>) -> anyhow::Result<Browse
         proxy_server: proxy.as_deref(),
         ..LaunchOptions::default()
     })
+}
+
+pub fn first_tab(browser: &Browser) -> anyhow::Result<Arc<Tab>> {
+    let tabs_guard = browser
+        .get_tabs()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let (first, remains) = tabs_guard
+        .split_first()
+        .ok_or_else(|| anyhow::anyhow!("no tabs found"))?;
+
+    for remain in remains {
+        remain.close(true)?;
+    }
+
+    Ok(first.clone())
+}
+
+pub async fn wait_for_async<'tab>(tab: &'tab Tab, selector: &str) -> anyhow::Result<Element<'tab>> {
+    const PERIOD: Duration = Duration::from_millis(1832);
+
+    loop {
+        match block_in_place(|| tab.find_element(selector)) {
+            Ok(element) => break Ok(element),
+            Err(err) => {
+                if !err.is::<NoElementFound>() {
+                    break Err(err);
+                }
+            }
+        }
+
+        sleep(PERIOD).await;
+    }
+}
+
+pub async fn inner_html(element: &Element<'_>) -> anyhow::Result<String> {
+    let ret = block_in_place(
+        || element.call_js_fn("function() { return this.innerHTML }", Vec::new(), false)
+    )?;
+
+    match ret.value {
+        Some(Value::String(s)) => Ok(s),
+        Some(value) => anyhow::bail!("not a string: {value}"),
+        None => anyhow::bail!("returned nothing"),
+    }
 }

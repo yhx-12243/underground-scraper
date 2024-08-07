@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;
 
-    let client = uscr::scrape::basic()?;
+    let client = uscr::scrape::simple()?;
 
     tracing::info!(target: "main", "start fetching ...");
     let res = client

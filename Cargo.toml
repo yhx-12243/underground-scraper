@@ -19,7 +19,6 @@ compact_str = { version = "0.8.0", features = ["serde"] }
 const_format = "0.2.32"
 dashmap = { version = "6.0.1", features = ["inline", "raw-api"] }
 either = "1.13.0"
-fantoccini = "0.21.1"
 futures-util = "0.3.30"
 grammers-client = { git = "https://github.com/Lonami/grammers", features = ["parse_invite_link", "proxy"] }
 grammers-mtsender = { git = "https://github.com/Lonami/grammers" }
@@ -29,7 +28,7 @@ hashbrown = { version = "0.14.5", features = ["serde"] }
 headless_chrome = "1.0.10"
 httpdate = "1.0.3"
 hyper = "1.4.1"
-hyper-util = "0.1.6"
+hyper-util = "0.1.7"
 # indicatif = { version = "0.17.8", features = ["improved_unicode"] }
 log = { version = "0.4.22", features = ["release_max_level_info"] }
 parking_lot = "0.12.2"
@@ -109,12 +108,8 @@ name = "blackhatworld"
 path = "src/blackhatworld/main.rs"
 
 [[bin]]
-name = "hackforums"
-path = "src/hackforums/main.rs"
-
-[[bin]]
-name = "hackforums-inner"
-path = "src/hackforums-inner/main.rs"
+name = "blackhatworld-server"
+path = "src/blackhatworld-server/main.rs"
 
 [[bin]]
 name = "blackhatworld-worker"
