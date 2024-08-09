@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{BufWriter, Write},
+    io::{BufWriter, IoSlice, Write},
     pin::pin,
 };
 
@@ -101,8 +101,10 @@ impl Inspector {
                         batch.push((channel_id, message_id, id2));
                     }
                 } else {
-                    let _ = self.saver.write_all(result.as_bytes());
-                    let _ = self.saver.write_all(b"\n");
+                    let _ = self.saver.write_all_vectored(&mut [
+                        IoSlice::new(result.as_bytes()),
+                        IoSlice::new(b"\n"),
+                    ]);
                 }
             }
         }

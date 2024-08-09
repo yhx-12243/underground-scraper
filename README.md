@@ -22,7 +22,6 @@ The project has following requirements:
 
 * A Rust toolchain in a `nightly` version (not too old, 1.75+ is sufficient),
 * A [PostgreSQL](https://www.postgresql.org/) client (and server, if you don't have, v14+ is OK).
-* A [ChromeDriver](https://chromedriver.chromium.org/), listening on port 9515 (default), as new as possible (120+ is OK).
 * (Optional) A Python 3 running environment (3.10+ is OK).
 
 The other dependencies will download when building by *Cargo*, please keep the network connection well.
@@ -180,7 +179,7 @@ CREATE TABLE blackhatworld.posts (
 ./blackhatworld
 ```
 
-This program is written by Rust with `fantoccini` (the Rust version of WebDriver), so you should launch your `chromedriver` (just default parameters, port 9515) before running.
+This program is written by Rust with `headless-chrome` (the Rust version of [Puppeteer](https://pptr.dev/)), so you should prepare a Chrome browser before running.
 
 Then you will see a Chrome page open. With a certain probability, the Chrome will popup a Cloudflare verifying page and you should solve it manually or refresh page several times.
 

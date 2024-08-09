@@ -7,6 +7,7 @@
     ptr_sub_ptr,
     string_deref_patterns,
     try_blocks,
+    write_all_vectored,
     yeet_expr,
 )]
 
