@@ -1,54 +1,37 @@
-use core::pin::pin;
-
 use compact_str::CompactString;
 use either::Either::{self, Left, Right};
-use futures_util::TryStreamExt;
 use grammers_client::InvocationError;
 use grammers_mtsender::RpcError;
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use parking_lot::Mutex;
-use tokio_postgres::types::{Json, ToSql};
+use tokio_postgres::types::Json;
 use tokio_postgres::Client as DBClient;
 use unicase::UniCase;
-use uscr::db::DBResult;
 
 use crate::{
     db::DBWrapper,
     telegram::{client::Client, BotCommand, Channel, User, COMMAND_LIST},
 };
 
-pub async fn get_searched_peers(conn: &mut DBClient) -> DBResult<HashSet<UniCase<CompactString>>> {
-    const SQL_GET: &str =
-        "select hash from telegram.invite union all \
-         select name from telegram.channel union all \
-         select name from telegram.bots";
-
-    let stmt = conn.prepare_static(SQL_GET.into()).await?;
-    let stream = conn.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
-    let mut stream = pin!(stream);
-    let mut result = HashSet::new();
-    while let Some(row) = stream.try_next().await? {
-        let s = row.try_get::<_, &str>(0)?;
-        result.insert(UniCase::new(CompactString::new(s)));
-    }
-    Ok(result)
-}
-
 pub fn separate_id_and_names(
     raw: Vec<CompactString>,
-    filter_out: &HashSet<UniCase<CompactString>>,
+    filter_out: &HashMap<UniCase<CompactString>, i64>,
 ) -> (HashSet<i64>, HashSet<UniCase<CompactString>>) {
+    let filter_out_id = filter_out.values().copied().collect::<HashSet<_>>();
+
     let mut ids = HashSet::with_capacity(raw.len());
     let mut name_or_hashes = HashSet::with_capacity(raw.len());
 
     for entry in raw {
         if let Ok(id) = entry.parse() {
-            ids.insert(id);
+            if !filter_out_id.contains(&id) {
+                ids.insert(id);
+            }
         } else {
             let entry = UniCase::new(entry);
-            if !filter_out.contains(&entry) {
+            if !filter_out.contains_key(&entry) {
                 name_or_hashes.insert(entry);
             }
         }
@@ -126,7 +109,7 @@ async fn get_description(
                 }
 
                 (base, None)
-            },
+            }
             Err(e) => {
                 log::error!(target: target, "get \x1b[35mdescription of [{ty}] {id}\x1b[0m err: {e:?}");
                 (e.to_string(), None)

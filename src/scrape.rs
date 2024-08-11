@@ -83,7 +83,7 @@ pub async fn wait_for_async<'tab>(tab: &'tab Tab, selector: &str) -> anyhow::Res
 
 pub async fn inner_html(element: &Element<'_>) -> anyhow::Result<String> {
     let tab = {
-        let tab = ManuallyDrop::new(unsafe { Arc::from_raw(core::ptr::from_ref(element.parent)) });
+        let tab = ManuallyDrop::new(unsafe { Arc::from_raw(element.parent) });
         Arc::clone(&tab)
     };
     let remote_object_id = element.remote_object_id.clone();

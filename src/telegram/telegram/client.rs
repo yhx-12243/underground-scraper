@@ -130,15 +130,14 @@ impl Client {
     ) {
         loop {
             match client.next_update().await {
-                Ok(Some(update)) => if let Update::NewMessage(message) = update
-                    && !message.outgoing()
+                Ok(Update::NewMessage(message)) => if !message.outgoing()
                     && let Some(ref peer) = message.raw.from_id
                     && let Some((_, sender)) = promises.remove(&Peer::from(peer.clone()).0)
                     && let Err(e) = sender.send(message) {
                     tracing::info!(target: "telegram-listener", "error sending message: {e:?}");
                 }
-                Ok(None) => break,
                 Err(e) => tracing::info!(target: "telegram-listener", "error receiving message: {e:?}"),
+                _ => (),
             }
         }
     }

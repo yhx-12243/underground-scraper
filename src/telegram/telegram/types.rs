@@ -60,6 +60,7 @@ impl From<tl::enums::ReplyMarkup> for ReplyMarkup {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[repr(transparent)]
 pub struct Peer(pub i64);
 
 impl From<tl::enums::Peer> for Peer {

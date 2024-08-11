@@ -1,4 +1,4 @@
-use std::{ascii::Char, ffi::OsString, path::PathBuf, time::SystemTime};
+use std::{ascii::Char, error::Error, ffi::OsString, io, path::PathBuf, time::SystemTime};
 
 const TEMPLATE_DATE: [Char; 29] = *b"Sun, 0D MMM YYYY_hh_mm:00 GMT".as_ascii().unwrap();
 
@@ -41,6 +41,16 @@ where
     rows.filter(|row| !row.try_get(0).is_ok_and(|p: u32| p != 0)).count()
 }
 
+#[inline]
+#[must_use]
+pub fn box_io_error(e: io::Error) -> Box<dyn Error + Send + Sync> {
+    if e.get_ref().is_some() {
+        unsafe { e.into_inner().unwrap_unchecked() }
+    } else {
+        Box::new(e)
+    }
+}
+
 pub trait SetLenExt {
     /// # Safety
     ///
@@ -59,6 +69,7 @@ impl SetLenExt for OsString {
         }
     }
 
+    #[inline]
     fn append_i32(&mut self, value: i32) {
         unsafe {
             use std::fmt::Display;
@@ -77,6 +88,7 @@ impl SetLenExt for PathBuf {
         }
     }
 
+    #[inline]
     fn append_i32(&mut self, value: i32) {
         self.push("");
         self.as_mut_os_string().append_i32(value);

@@ -92,9 +92,9 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         Commands::Ping { channels: raw_channels, force } => {
             let searched = if force {
-                HashSet::default()
+                HashMap::default()
             } else {
-                ping::get_searched_peers(&mut conn).await?
+                db::get_searched_peers(&mut conn).await?
             };
 
             let mut channels = HashMap::with_capacity(raw_channels.len());
@@ -180,7 +180,7 @@ async fn main() -> anyhow::Result<()> {
             futures_util::future::join_all(futs).await;
         }
         Commands::Extract { save } => {
-            let map = extract::generate_user_id_map(&mut conn).await?;
+            let map = db::get_searched_peers(&mut conn).await?;
 
             let mut inspector = extract::Inspector::new(
                 map,

@@ -55,7 +55,7 @@ async fn main() -> std::io::Result<!> {
 
     // Decomment following two lines and comment out all subsequent lines to listen on TCP 18322 port.
     //
-    // let listener = tokio::net::TcpListener::bind("0.0.0.0:18322")?;
+    // let listener = tokio::net::TcpListener::bind("0.0.0.0:18322").await?;
     // axum::serve(listener, app).await
 
     if let Err(err) = std::fs::remove_file(SOCK) && err.kind() != std::io::ErrorKind::NotFound {

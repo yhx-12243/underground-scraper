@@ -253,25 +253,29 @@ See Telegram's [Apps](https://my.telegram.org/apps) page to register and get you
 Then you should create a file named `telegram/config.json` (it can changed in command line arguments in `./telegram`, see `./telegram --help`), with [following content](./telegram/config.json.example):
 
 ```json
-{
-	"api_id_1": {
+[
+	{
+		"id": "api_id_1",
 		"hash": "api_hash_1"
 	},
-	"api_id_2": {
+	{
+		"id": "api_id_2",
 		"hash": "api_hash_2",
 		"proxy": null
 	},
-	"api_id_3": {
+	{
+		"id": "api_id_3",
 		"hash": "api_hash_3",
 		"proxy": "http://www.example.com/"
 	},
-	"api_id_4": {
+	{
+		"id": "api_id_4",
 		"hash": "api_hash_4",
 		"proxy": "http://username:password@www.example.com/",
 		"session_file": 123456
 	},
 	...
-}
+]
 ```
 
 #### SQL Schema

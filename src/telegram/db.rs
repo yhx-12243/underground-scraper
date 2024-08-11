@@ -1,4 +1,10 @@
-use tokio_postgres::{Client, Statement};
+use core::pin::pin;
+
+use compact_str::CompactString;
+use futures_util::TryStreamExt;
+use hashbrown::HashMap;
+use tokio_postgres::{types::ToSql, Client, Statement};
+use unicase::UniCase;
 use uscr::db::DBResult;
 
 use crate::telegram::{Channel, User};
@@ -99,4 +105,22 @@ pub async fn get_all_bots_from_db(conn: &mut Client) -> DBResult<Vec<User>> {
         Ok(r) => Ok(r.into_iter().map(Into::into).collect()),
         Err(e) => Err(e),
     }
+}
+
+pub async fn get_searched_peers(conn: &mut Client) -> DBResult<HashMap<UniCase<CompactString>, i64>> {
+    const SQL: &str =
+        "select channel_id, hash from telegram.invite union all \
+         select id, name from telegram.channel union all \
+         select id, name from telegram.bots";
+
+    let stmt = conn.prepare_static(SQL.into()).await?;
+    let stream = conn.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
+    let mut stream = pin!(stream);
+    let mut result = HashMap::new();
+    while let Some(row) = stream.try_next().await? {
+        let id = row.try_get(0)?;
+        let name = row.try_get::<_, &str>(1)?;
+        result.insert(UniCase::new(CompactString::new(name)), id);
+    }
+    Ok(result)
 }

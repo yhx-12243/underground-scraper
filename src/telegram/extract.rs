@@ -10,8 +10,8 @@ use hashbrown::{hash_map::RawEntryMut, hash_set::HashSet, HashMap};
 use tokio_postgres::{types::ToSql, Client};
 use unicase::UniCase;
 use uscr::{
-    db::{get_connection, DBResult, ToSqlIter},
-    util::xmax_to_success,
+    db::{get_connection, DBError, DBResult, ToSqlIter},
+    util::{box_io_error, xmax_to_success},
 };
 
 const fn idc(ch: u8) -> bool {
@@ -94,18 +94,9 @@ impl Inspector {
         const SQL: &str = "with tmp_insert(c1, m, c2) as (select * from unnest($1::bigint[], $2::integer[], $3::bigint[])) insert into telegram.link (c1, message_id, c2) select c1, m, c2 from tmp_insert on conflict (c1, message_id, c2) do nothing returning xmax";
 
         let mut batch = Vec::with_capacity(self.es.len());
-        {
-            for (channel_id, message_id, result) in core::mem::take(&mut self.es) {
-                if let Some(&id2) = self.map.get(&result) {
-                    if channel_id != id2 { // self reference
-                        batch.push((channel_id, message_id, id2));
-                    }
-                } else {
-                    let _ = self.saver.write_all_vectored(&mut [
-                        IoSlice::new(result.as_bytes()),
-                        IoSlice::new(b"\n"),
-                    ]);
-                }
+        for (channel_id, message_id, result) in core::mem::take(&mut self.es) {
+            if let Some(&id2) = self.map.get(&result) && channel_id != id2 { // self reference
+                batch.push((channel_id, message_id, id2));
             }
         }
 
@@ -150,26 +141,17 @@ impl Inspector {
             }
         }
 
-        self.commit(conn).await.map_err(Into::into)
-    }
-}
+        self.commit(conn).await?;
 
-pub async fn generate_user_id_map(
-    conn: &mut Client,
-) -> DBResult<HashMap<UniCase<CompactString>, i64>> {
-    const SQL: &str =
-        "select channel_id, hash from telegram.invite union all \
-         select id, name from telegram.channel union all \
-         select id, name from telegram.bots";
+        for id in &self.dict {
+            self.saver
+                .write_all_vectored(&mut [
+                    IoSlice::new(id.as_bytes()),
+                    IoSlice::new(b"\n")]
+                )
+                .map_err(|e| DBError::new(tokio_postgres::error::Kind::Io, Some(box_io_error(e))))?;
+        }
 
-    let stmt = conn.prepare_static(SQL.into()).await?;
-    let stream = conn.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
-    let mut stream = pin!(stream);
-    let mut result = HashMap::new();
-    while let Some(row) = stream.try_next().await? {
-        let id = row.try_get(0)?;
-        let name = row.try_get::<_, &str>(1)?;
-        result.insert(UniCase::new(CompactString::new(name)), id);
+        Ok(())
     }
-    Ok(result)
 }
