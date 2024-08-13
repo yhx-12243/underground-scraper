@@ -206,7 +206,7 @@ pub async fn fetch_content(
                     let db_fut = insert_to_db(&buffer, channel.id, &mut interval, target, db);
                     let batch_max: Option<i32> = join!(sleep, db_fut).await.1;
                     let (l, r) = interval.expect("interval shouldn't be None after insert");
-                    let l_i = r.cast_unsigned().checked_sub(limit).and_then(|x| x.try_into().ok()).unwrap_or(0);
+                    let l_i = r.cast_unsigned().saturating_sub(limit).cast_signed();
                     stop_point = stop_point.max(l_i);
                     if batch_max.is_some_and(|x| x <= stop_point) {
                         if !jumping {
