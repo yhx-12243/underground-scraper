@@ -35,12 +35,13 @@ pub struct Post {
     pub lastReply: SystemTime,
 }
 
-fn _pa(x: &str) -> Option<i64> {
-    x.replace('K', "000").replace('M', "000000").parse().ok()
-}
-
 #[allow(clippy::too_many_lines)]
 pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
+    #[inline]
+    fn _pa(x: String) -> Option<i64> {
+        x.replace('K', "000").replace('M', "000000").parse().ok()
+    }
+
     tracing::info!(target: "worker", "[Forum \x1b[33m{}\x1b[0m] [Page \x1b[32m#{page}\x1b[0m] start", ctx.cfg.0);
 
     let url = format!(
@@ -66,7 +67,7 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
         }
     };
 
-    let html = match scrape::inner_html(&list).await {
+    let html = match scrape::outer_html(&list).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
@@ -104,8 +105,8 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
                 ))?;
 
                 let mut dd = c[2].select(&ctx.sel_dd);
-                let replies = _pa(&dd.next()?.text().map(str::trim).collect::<String>())?;
-                let views = _pa(&dd.next()?.text().map(str::trim).collect::<String>())?;
+                let replies = _pa(dd.next()?.text().map(str::trim).collect())?;
+                let views = _pa(dd.next()?.text().map(str::trim).collect())?;
 
                 let lastReply = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
                     c[3].select(&ctx.sel_udt)

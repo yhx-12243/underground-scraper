@@ -35,8 +35,8 @@ async fn main() -> std::io::Result<!> {
     use hyper::{body::Incoming, server::conn, Request};
     use hyper_util::rt::TokioIo;
     use tokio::net::UnixListener;
-    use tower::Service;
     use tower_http::cors::CorsLayer;
+    use tower_service::Service;
 
     const SOCK: &str = "underground-scraper.sock";
 

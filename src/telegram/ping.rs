@@ -104,7 +104,7 @@ async fn get_description(
                         base.push(')');
                     }
                     if let Some(commands) = bot_info.commands {
-                        return (base, Some(commands.into_iter().map(Into::into).collect::<Vec<BotCommand>>()));
+                        return (base, Some(commands.into_iter().map(Into::into).collect()));
                     }
                 }
 

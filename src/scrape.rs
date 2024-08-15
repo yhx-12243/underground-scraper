@@ -1,7 +1,9 @@
 use std::{ffi::OsStr, mem::ManuallyDrop, sync::Arc, time::Duration};
 
 use headless_chrome::{
-    browser::tab::NoElementFound, protocol::cdp::Runtime, Browser, Element, LaunchOptions, Tab,
+    browser::tab::NoElementFound,
+    protocol::cdp::{Runtime, DOM},
+    Browser, Element, LaunchOptions, Tab,
 };
 use serde_json::Value;
 use tokio::{
@@ -109,4 +111,22 @@ pub async fn inner_html(element: &Element<'_>) -> anyhow::Result<String> {
         Some(value) => anyhow::bail!("not a string: {value}"),
         None => anyhow::bail!("returned nothing"),
     }
+}
+
+pub async fn outer_html(element: &Element<'_>) -> anyhow::Result<String> {
+    let tab = {
+        let tab = ManuallyDrop::new(unsafe { Arc::from_raw(element.parent) });
+        Arc::clone(&tab)
+    };
+    let node_id = element.node_id;
+    let backend_node_id = element.backend_node_id;
+    let remote_object_id = element.remote_object_id.clone();
+
+    spawn_blocking(move ||
+        tab.call_method(DOM::GetOuterHTML {
+            node_id: Some(node_id),
+            backend_node_id: Some(backend_node_id),
+            object_id: Some(remote_object_id),
+        })
+    ).await?.map(|x| x.outer_html)
 }
