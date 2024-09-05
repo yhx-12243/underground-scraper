@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
                 PROXY_HOST.map(|host| format!("http://{host}:{port}")),
             )?;
 
-            let tab = uscr::scrape::first_tab(&browser)?;
+            let tab = uscr::scrape::puppeteer::first_tab(&browser)?;
 
             let user_agent = {
                 use rand::seq::SliceRandom;

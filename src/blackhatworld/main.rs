@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
 
     let browser = uscr::scrape::puppeteer(false, None)?;
 
-    let tab = uscr::scrape::first_tab(&browser)?;
+    let tab = uscr::scrape::puppeteer::first_tab(&browser)?;
 
     let mut ctx = scrape::Context {
         tab,

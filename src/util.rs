@@ -1,4 +1,7 @@
-use std::{ascii::Char, error::Error, ffi::OsString, io, path::PathBuf, time::SystemTime};
+use std::{
+    ascii::Char, error::Error, ffi::OsString, io, mem::ManuallyDrop, path::PathBuf, sync::Arc,
+    time::SystemTime,
+};
 
 const TEMPLATE_DATE: [Char; 29] = *b"Sun, 0D MMM YYYY_hh_mm:00 GMT".as_ascii().unwrap();
 
@@ -93,4 +96,9 @@ impl SetLenExt for PathBuf {
         self.push("");
         self.as_mut_os_string().append_i32(value);
     }
+}
+
+pub fn clone_arc<T>(this: &T) -> Arc<T> {
+    let arc = ManuallyDrop::new(unsafe { Arc::from_raw(this) });
+    Arc::clone(&arc)
 }
