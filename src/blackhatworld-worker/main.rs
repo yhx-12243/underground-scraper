@@ -46,8 +46,6 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    let client = uscr::scrape::simple()?;
-
     match args.command {
         Commands::Config { port } => {
             let browser = uscr::scrape::puppeteer(
@@ -96,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
             config,
             port: server_port,
         } => {
+            let client = uscr::scrape::simple()?;
             let file = std::fs::File::open(config)?;
             let reader = std::io::BufReader::new(file);
             let config = serde_json::from_reader::<_, WorkConfig>(reader)?;

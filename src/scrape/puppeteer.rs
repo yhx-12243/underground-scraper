@@ -21,19 +21,22 @@ pub fn puppeteer(headless: bool, proxy: Option<String>) -> anyhow::Result<Browse
 
 #[allow(clippy::significant_drop_tightening)]
 pub fn first_tab(browser: &Browser) -> anyhow::Result<Arc<Tab>> {
-    let tabs_guard = browser
-        .get_tabs()
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let (first, remains) = tabs_guard
-        .split_first()
-        .ok_or_else(|| anyhow::anyhow!("no tabs found"))?;
+    let tab = browser.new_tab()?;
 
-    for remain in remains {
-        remain.close(true)?;
+    {
+        let tabs_guard = browser
+            .get_tabs()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        for remain in &*tabs_guard {
+            if !Arc::ptr_eq(&tab, remain) {
+                remain.close(true)?;
+            }
+        }
     }
 
-    Ok(first.clone())
+    Ok(tab)
 }
 
 pub async fn navigate_to<'tab>(

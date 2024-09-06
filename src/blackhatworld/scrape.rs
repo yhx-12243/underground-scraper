@@ -9,7 +9,7 @@ use regex::Regex;
 use scraper::{Html, Selector};
 use uscr::{
     db::{get_connection, BB8Error, ToSqlIter},
-    scrape,
+    scrape::puppeteer,
     util::xmax_to_success,
 };
 
@@ -48,17 +48,17 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
         ctx.cfg.0, ctx.cfg.1,
     );
 
-    if let Err(e) = scrape::puppeteer::navigate_to(&ctx.tab, url.into()).await {
+    if let Err(e) = puppeteer::navigate_to(&ctx.tab, url.into()).await {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
         return ControlFlow::Continue(());
     }
 
-    if let Err(e) = scrape::puppeteer::wait_for_async(&ctx.tab, ".js-threadList".into()).await {
+    if let Err(e) = puppeteer::wait_for_async(&ctx.tab, ".js-threadList".into()).await {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
         return ControlFlow::Continue(());
     }
 
-    let list = match scrape::puppeteer::find_async(&ctx.tab, ".structItemContainer".into()).await {
+    let list = match puppeteer::find_async(&ctx.tab, ".structItemContainer".into()).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
@@ -66,7 +66,7 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
         }
     };
 
-    let html = match scrape::puppeteer::outer_html(&list).await {
+    let html = match puppeteer::outer_html(&list).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");

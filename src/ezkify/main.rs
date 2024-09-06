@@ -103,11 +103,10 @@ async fn main() -> anyhow::Result<()> {
     use parse_item::{CID, GLOBAL_DATE};
     use std::sync::atomic::Ordering;
 
-    let args = Args::parse();
-
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;
 
+    let args = Args::parse();
     let client = uscr::scrape::simple()?;
 
     tracing::info!(target: "main", "start fetching ...");
