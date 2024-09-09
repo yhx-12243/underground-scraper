@@ -1,4 +1,5 @@
 use core::fmt::Debug;
+use std::sync::OnceLock;
 
 use bb8_postgres::{bb8, PostgresConnectionManager};
 use tokio_postgres::{
@@ -13,7 +14,7 @@ pub type DBError = tokio_postgres::Error;
 pub type BB8Error = bb8::RunError<DBError>;
 pub type DBResult<T> = Result<T, DBError>;
 
-static mut POOL: Option<Pool> = None;
+static POOL: OnceLock<Pool> = OnceLock::new();
 
 mod constants {
     use core::time::Duration;
@@ -57,15 +58,12 @@ pub async fn init_db() {
         .await
         .unwrap();
 
-    unsafe {
-        assert!(POOL.is_none());
-        POOL = Some(pool);
-    }
+    POOL.set(pool).unwrap();
 }
 
 #[inline(always)]
 pub fn get_connection() -> impl Future<Output = Result<PooledConnection, BB8Error>> {
-    unsafe { POOL.as_ref().unwrap_unchecked().get() }
+    unsafe { POOL.get().unwrap_unchecked().get() }
 }
 
 #[inline(always)]
