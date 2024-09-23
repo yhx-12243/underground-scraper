@@ -28,11 +28,11 @@ async fn get_black_ids() -> impl Iterator<Item = i64> {
 #[tokio::main]
 async fn main() -> std::io::Result<!> {
     use axum::{
+        Router,
         extract::DefaultBodyLimit,
         routing::{get, post},
-        Router,
     };
-    use hyper::{body::Incoming, server::conn, Request};
+    use hyper::{Request, body::Incoming, server::conn};
     use hyper_util::rt::TokioIo;
     use tokio::net::UnixListener;
     use tower_http::cors::CorsLayer;

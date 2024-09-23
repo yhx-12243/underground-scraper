@@ -3,9 +3,9 @@ use std::{
     time::SystemTime,
 };
 
-use reqwest::{header::DATE, Client as Request};
+use reqwest::{Client as Request, header::DATE};
 use scraper::{Html, Selector};
-use uscr::db::{get_connection, BB8Error, ToSqlIter};
+use uscr::db::{BB8Error, ToSqlIter, get_connection};
 
 pub struct Context {
     pub client: Request,
@@ -78,17 +78,14 @@ pub async fn work(id: i64, c_desc: String, ctx: &Context) {
 
             let mut conn = get_connection().await?;
             let stmt = conn.prepare_static(SQL.into()).await?;
-            conn.execute(
-                &stmt,
-                &[
-                    &ToSqlIter(archived.iter().map(|x| x.0)),
-                    &id,
-                    &date,
-                    &ToSqlIter(archived.iter().map(|x| &*x.1)),
-                    &ToSqlIter(archived.iter().map(|x| x.2)),
-                    &ToSqlIter(archived.iter().map(|x| x.3)),
-                ],
-            )
+            conn.execute(&stmt, &[
+                &ToSqlIter(archived.iter().map(|x| x.0)),
+                &id,
+                &date,
+                &ToSqlIter(archived.iter().map(|x| &*x.1)),
+                &ToSqlIter(archived.iter().map(|x| x.2)),
+                &ToSqlIter(archived.iter().map(|x| x.3)),
+            ])
             .await?;
 
             tracing::info!(target: "worker", "\x1b[36m[#{id}] update {} items\x1b[0m", archived.len());

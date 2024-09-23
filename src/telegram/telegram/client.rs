@@ -1,5 +1,5 @@
 use std::{
-    io::{self, stdin, stdout, BufRead, Write},
+    io::{self, BufRead, Write, stdin, stdout},
     os::fd::{AsFd, AsRawFd},
     path::PathBuf,
     sync::Arc,
@@ -7,11 +7,11 @@ use std::{
 
 use dashmap::DashMap;
 use grammers_client::{
-    types::Message, Client as ClientInner, Config, InitParams, SignInError, Update,
+    Client as ClientInner, Config, InitParams, SignInError, Update, types::Message,
 };
 use grammers_mtsender::AuthorizationError;
 use grammers_session::Session;
-use hashbrown::{hash_map::DefaultHashBuilder, HashMap};
+use hashbrown::{DefaultHashBuilder, HashMap};
 use serde::Deserialize;
 use tokio::{sync::oneshot, task::JoinHandle};
 

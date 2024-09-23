@@ -21,19 +21,28 @@ index 4b98461..6f088ec 100644
              self.fetched += 1;
              Some(item)
 diff --git a/lib/grammers-mtsender/Cargo.toml b/lib/grammers-mtsender/Cargo.toml
-index 5b33515..b0ac1ee 100644
+index a7d8ab5..af281e4 100644
 --- a/lib/grammers-mtsender/Cargo.toml
 +++ b/lib/grammers-mtsender/Cargo.toml
 @@ -17,6 +17,7 @@ edition = "2021"
- proxy = ["tokio-socks", "trust-dns-resolver", "url"]
+ proxy = ["tokio-socks", "hickory-resolver", "url"]
  
  [dependencies]
 +base64 = "0.22.1"
  bytes = "1.7.1"
  futures-util = { version = "0.3.30", default-features = false, features = [
      "alloc"
+@@ -27,7 +28,7 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features
+ log = "0.4.22"
+ tokio = { version = "1.40.0", default-features = false, features = ["net", "io-util", "sync", "time"] }
+ tokio-socks = { version = "0.5.2", optional = true }
+-hickory-resolver = { version = "0.24.1", optional = true }
++hickory-resolver = { git = "https://github.com/hickory-dns/hickory-dns", optional = true }
+ url = { version = "2.5.2", optional = true }
+ 
+ [dev-dependencies]
 diff --git a/lib/grammers-mtsender/src/lib.rs b/lib/grammers-mtsender/src/lib.rs
-index c899a46..9bcff03 100644
+index ee52a35..09a8287 100644
 --- a/lib/grammers-mtsender/src/lib.rs
 +++ b/lib/grammers-mtsender/src/lib.rs
 @@ -98,6 +98,8 @@ pub enum NetStream {
@@ -54,7 +63,7 @@ index c899a46..9bcff03 100644
          }
      }
  }
-@@ -834,21 +838,36 @@ async fn connect_proxy_stream(
+@@ -837,21 +841,36 @@ async fn connect_proxy_stream(
      };
  
      match scheme {

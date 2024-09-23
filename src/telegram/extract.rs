@@ -6,11 +6,11 @@ use std::{
 
 use compact_str::CompactString;
 use futures_util::TryStreamExt;
-use hashbrown::{hash_map::RawEntryMut, hash_set::HashSet, HashMap};
-use tokio_postgres::{types::ToSql, Client};
+use hashbrown::{HashMap, hash_map::RawEntryMut, hash_set::HashSet};
+use tokio_postgres::{Client, types::ToSql};
 use unicase::UniCase;
 use uscr::{
-    db::{get_connection, DBError, DBResult, ToSqlIter},
+    db::{DBError, DBResult, ToSqlIter, get_connection},
     util::{box_io_error, xmax_to_success},
 };
 
@@ -106,14 +106,11 @@ impl Inspector {
 
         let stmt = conn.prepare_static(SQL.into()).await?;
         let rows = conn
-            .query(
-                &stmt,
-                &[
-                    &ToSqlIter(batch.iter().map(|x| x.0)),
-                    &ToSqlIter(batch.iter().map(|x| x.1)),
-                    &ToSqlIter(batch.iter().map(|x| x.2)),
-                ],
-            )
+            .query(&stmt, &[
+                &ToSqlIter(batch.iter().map(|x| x.0)),
+                &ToSqlIter(batch.iter().map(|x| x.1)),
+                &ToSqlIter(batch.iter().map(|x| x.2)),
+            ])
             .await?;
 
         tracing::info!(target: "telegram-committer", "\x1b[32m{}\x1b[0m/\x1b[33m{}\x1b[0m links added.", xmax_to_success(rows.iter()), batch.len());
@@ -145,11 +142,10 @@ impl Inspector {
 
         for id in &self.dict {
             self.saver
-                .write_all_vectored(&mut [
-                    IoSlice::new(id.as_bytes()),
-                    IoSlice::new(b"\n")]
-                )
-                .map_err(|e| DBError::new(tokio_postgres::error::Kind::Io, Some(box_io_error(e))))?;
+                .write_all_vectored(&mut [IoSlice::new(id.as_bytes()), IoSlice::new(b"\n")])
+                .map_err(|e| {
+                    DBError::new(tokio_postgres::error::Kind::Io, Some(box_io_error(e)))
+                })?;
         }
 
         Ok(())

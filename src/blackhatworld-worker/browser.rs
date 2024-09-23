@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use headless_chrome::{
+    Tab,
     browser::tab::EventListener,
     protocol::cdp::{
-        types::Event,
         Network::{
             self,
             events::{RequestWillBeSentEvent, RequestWillBeSentExtraInfoEvent},
         },
+        types::Event,
     },
-    Tab,
 };
 use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;

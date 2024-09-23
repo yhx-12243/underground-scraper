@@ -3,7 +3,7 @@ use core::pin::pin;
 use compact_str::CompactString;
 use futures_util::TryStreamExt;
 use hashbrown::HashMap;
-use tokio_postgres::{types::ToSql, Client, Statement};
+use tokio_postgres::{Client, Statement, types::ToSql};
 use unicase::UniCase;
 use uscr::db::DBResult;
 

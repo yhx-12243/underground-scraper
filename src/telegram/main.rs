@@ -3,9 +3,7 @@
     future_join,
     integer_sign_cast,
     let_chains,
-    os_str_display,
     ptr_sub_ptr,
-    string_deref_patterns,
     try_blocks,
     write_all_vectored,
     yeet_expr,
@@ -48,13 +46,13 @@ struct Args {
 #[derive(clap::Subcommand)]
 enum Commands {
     Ping {
-        #[arg(short, long, num_args=1.., required=true)]
+        #[arg(short, long, num_args = 1.., required = true)]
         channels: Vec<compact_str::CompactString>,
         #[arg(short, long)]
         force: bool,
     },
     Content {
-        #[arg(short, long, num_args=1.., value_parser=clap::value_parser!(i64).range(0..))]
+        #[arg(short, long, num_args = 1.., value_parser = clap::value_parser!(i64).range(0..))]
         channels: Vec<i64>,
         #[arg(short, long, default_value_t = 10240)]
         limit: u32,
@@ -64,7 +62,7 @@ enum Commands {
         save: std::path::PathBuf,
     },
     Interact {
-        #[arg(short, long, num_args=1.., required=true, value_parser=clap::value_parser!(i64).range(0..))]
+        #[arg(short, long, num_args = 1.., required = true, value_parser = clap::value_parser!(i64).range(0..))]
         peers: Vec<i64>,
     },
 }

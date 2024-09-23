@@ -7,7 +7,7 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;
 
-    let client = uscr::scrape::simple()?;
+    let client = uscr::scrape::simple();
 
     let res = client
         .get("https://accsmarket.com/")

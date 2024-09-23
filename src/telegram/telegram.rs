@@ -1,7 +1,7 @@
 pub mod client;
 mod types;
 
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::{StreamExt, stream::FuturesUnordered};
 pub use types::BotCommand;
 
 use std::{
@@ -73,8 +73,8 @@ where
     C: Iterator<Item = i64> + Send,
 {
     use tl::{
-        enums::{messages::Chats, Chat, InputChannel::Channel as Ch},
-        types::{messages, InputChannel},
+        enums::{Chat, InputChannel::Channel as Ch, messages::Chats},
+        types::{InputChannel, messages},
     };
 
     let request = tl::functions::channels::GetChannels {
@@ -118,14 +118,11 @@ async fn insert_to_db(
 
         let rows = db
             .conn
-            .query(
-                db.stmts[1],
-                &[
-                    &ToSqlIter(messages.iter().map(|x| x.0)),
-                    &channel_id,
-                    &ToSqlIter(messages.iter().map(|x| Json(&x.1))),
-                ],
-            )
+            .query(db.stmts[1], &[
+                &ToSqlIter(messages.iter().map(|x| x.0)),
+                &channel_id,
+                &ToSqlIter(messages.iter().map(|x| Json(&x.1))),
+            ])
             .await?;
 
         Ok((xmax_to_success(rows.iter()), len, min, max))

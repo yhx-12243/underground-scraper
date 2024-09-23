@@ -1,4 +1,4 @@
-#![feature(fn_traits, let_chains, try_blocks, unboxed_closures)]
+#![feature(try_blocks)]
 
 mod browser;
 mod worker;
@@ -94,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
             config,
             port: server_port,
         } => {
-            let client = uscr::scrape::simple()?;
+            let client = uscr::scrape::simple();
             let file = std::fs::File::open(config)?;
             let reader = std::io::BufReader::new(file);
             let config = serde_json::from_reader::<_, WorkConfig>(reader)?;

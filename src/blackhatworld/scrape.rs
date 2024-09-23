@@ -8,7 +8,7 @@ use headless_chrome::Tab;
 use regex::Regex;
 use scraper::{Html, Selector};
 use uscr::{
-    db::{get_connection, BB8Error, ToSqlIter},
+    db::{BB8Error, ToSqlIter, get_connection},
     scrape::puppeteer,
     util::xmax_to_success,
 };
@@ -34,7 +34,7 @@ pub struct Post {
     pub lastReply: SystemTime,
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::used_underscore_items)]
 pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
     #[inline]
     fn _pa(x: String) -> Option<i64> {
@@ -135,19 +135,16 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
             let mut conn = get_connection().await?;
             let stmt = conn.prepare_static(SQL.into()).await?;
             let rows = conn
-                .query(
-                    &stmt,
-                    &[
-                        &ctx.cfg.1,
-                        &ToSqlIter(res.iter().map(|x| x.id)),
-                        &ToSqlIter(res.iter().map(|x| &*x.author)),
-                        &ToSqlIter(res.iter().map(|x| &*x.title)),
-                        &ToSqlIter(res.iter().map(|x| x.time)),
-                        &ToSqlIter(res.iter().map(|x| x.replies)),
-                        &ToSqlIter(res.iter().map(|x| x.views)),
-                        &ToSqlIter(res.iter().map(|x| x.lastReply)),
-                    ],
-                )
+                .query(&stmt, &[
+                    &ctx.cfg.1,
+                    &ToSqlIter(res.iter().map(|x| x.id)),
+                    &ToSqlIter(res.iter().map(|x| &*x.author)),
+                    &ToSqlIter(res.iter().map(|x| &*x.title)),
+                    &ToSqlIter(res.iter().map(|x| x.time)),
+                    &ToSqlIter(res.iter().map(|x| x.replies)),
+                    &ToSqlIter(res.iter().map(|x| x.views)),
+                    &ToSqlIter(res.iter().map(|x| x.lastReply)),
+                ])
                 .await?;
 
             let n_rows = xmax_to_success(rows.iter());

@@ -6,13 +6,13 @@ use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use hashbrown::{HashMap, HashSet};
 use parking_lot::Mutex;
-use tokio_postgres::types::Json;
 use tokio_postgres::Client as DBClient;
+use tokio_postgres::types::Json;
 use unicase::UniCase;
 
 use crate::{
     db::DBWrapper,
-    telegram::{client::Client, BotCommand, Channel, User, COMMAND_LIST},
+    telegram::{BotCommand, COMMAND_LIST, Channel, User, client::Client},
 };
 
 pub fn separate_id_and_names(
@@ -79,10 +79,10 @@ async fn get_description(
     if ty == PackedType::User || ty == PackedType::Bot {
         use tl::{
             enums::{
-                users::UserFull as EUUserFull, BotInfo as EBotInfo,
-                BotMenuButton as EBotMenuButton, UserFull as EUserFull,
+                BotInfo as EBotInfo, BotMenuButton as EBotMenuButton, UserFull as EUserFull,
+                users::UserFull as EUUserFull,
             },
-            types::{users::UserFull as TUUserFull, BotMenuButton as TBotMenuButton},
+            types::{BotMenuButton as TBotMenuButton, users::UserFull as TUUserFull},
         };
 
         let request = tl::functions::users::GetFullUser {
@@ -117,7 +117,7 @@ async fn get_description(
         }
     } else {
         use tl::{
-            enums::{messages::ChatFull as EMChatFull, ChatFull as EChatFull},
+            enums::{ChatFull as EChatFull, messages::ChatFull as EMChatFull},
             types::messages::ChatFull as TMChatFull,
         };
 

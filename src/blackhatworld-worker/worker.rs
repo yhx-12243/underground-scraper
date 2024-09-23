@@ -1,10 +1,10 @@
 use core::time::Duration;
 
-use compact_str::{format_compact, CompactString};
-use rand::{thread_rng, Rng};
+use compact_str::{CompactString, format_compact};
+use rand::{Rng, thread_rng};
 use reqwest::{
-    header::{HeaderValue, COOKIE},
     Client, Proxy, Version,
+    header::{COOKIE, HeaderValue},
 };
 use serde::Serialize;
 

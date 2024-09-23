@@ -1,9 +1,9 @@
 use std::{borrow::Cow, ffi::OsStr, sync::Arc, time::Duration};
 
 use headless_chrome::{
-    browser::tab::NoElementFound,
-    protocol::cdp::{Runtime, DOM},
     Browser, Element, LaunchOptions, Tab,
+    browser::tab::NoElementFound,
+    protocol::cdp::{DOM, Runtime},
 };
 use serde_json::Value;
 use tokio::{task::spawn_blocking, time::sleep};
@@ -39,10 +39,7 @@ pub fn first_tab(browser: &Browser) -> anyhow::Result<Arc<Tab>> {
     Ok(tab)
 }
 
-pub async fn navigate_to<'tab>(
-    tab: &'tab Tab,
-    url: Cow<'static, str>,
-) -> anyhow::Result<()> {
+pub async fn navigate_to(tab: &Tab, url: Cow<'static, str>) -> anyhow::Result<()> {
     let tab = clone_arc(tab);
 
     spawn_blocking(move || tab.navigate_to(&url).map(|_| ())).await?
@@ -50,7 +47,7 @@ pub async fn navigate_to<'tab>(
 
 pub async fn find_async<'tab>(
     tab: &'tab Tab,
-    selector: Cow<'static, str>
+    selector: Cow<'static, str>,
 ) -> anyhow::Result<Element<'tab>> {
     let arc_tab = clone_arc(tab);
 

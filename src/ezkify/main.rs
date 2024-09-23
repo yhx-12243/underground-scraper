@@ -1,9 +1,4 @@
-#![feature(
-    integer_sign_cast,
-    iter_array_chunks,
-    iter_next_chunk,
-    stmt_expr_attributes,
-)]
+#![feature(integer_sign_cast, iter_array_chunks, iter_next_chunk)]
 
 mod parse_item;
 
@@ -46,20 +41,17 @@ async fn insert_db(
 ) -> uscr::db::DBResult<()> {
     const SQL: &str = "insert into ezkify.items (key, id, time, category_id, service, rate_per_1k, min_order, max_order, description) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)";
     let stmt = conn.prepare_static(SQL.into()).await?;
-    conn.execute(
-        &stmt,
-        &[
-            &key,
-            &item.id,
-            &item.time,
-            &item.cid,
-            &item.service,
-            &item.rate_per_1k,
-            &item.min_order,
-            &item.max_order,
-            &item.description,
-        ],
-    )
+    conn.execute(&stmt, &[
+        &key,
+        &item.id,
+        &item.time,
+        &item.cid,
+        &item.service,
+        &item.rate_per_1k,
+        &item.min_order,
+        &item.max_order,
+        &item.description,
+    ])
     .await?;
     Ok(())
 }
@@ -107,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
     uscr::db::init_db().await;
 
     let args = Args::parse();
-    let client = uscr::scrape::simple()?;
+    let client = uscr::scrape::simple();
 
     tracing::info!(target: "main", "start fetching ...");
     let res = client
