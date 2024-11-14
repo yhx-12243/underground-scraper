@@ -10,7 +10,7 @@ repository = "https://github.com/yhx-12243/underground-scraper"
 
 [dependencies]
 anyhow = { version = "1.0.93", features = ["backtrace"] }
-axum = "0.7.7"
+axum = "0.7.9"
 bb8-postgres = { version = "0.8.1", features = ["with-serde_json-1"] }
 bytes = { version = "1.8.0", features = ["serde"] }
 clap = { version = "4.5.21", features = ["derive", "unicode", "wrap_help", "env", "string", "unstable-v5"] }
@@ -27,7 +27,7 @@ grammers-tl-types = { git = "https://github.com/Lonami/grammers" }
 hashbrown = { version = "0.15.1", features = ["serde"] }
 headless_chrome = "1.0.13"
 httpdate = "1.0.3"
-hyper = { version = "1.5.0", features = ["nightly"] }
+hyper = { version = "1.5.1", features = ["nightly"] }
 hyper-util = "0.1.10"
 # indicatif = { version = "0.17.8", features = ["improved_unicode"] }
 log = { version = "0.4.22", features = ["release_max_level_info"] }
@@ -40,10 +40,10 @@ reqwest = { version = "0.12.9", default-features = false, features = ["http2", "
 rpassword = "7.3.1"
 scraper = { version = "0.21.0", default-features = false }
 serde = { version = "1.0.215", features = ["derive"] }
-serde_json = "1.0.132"
+serde_json = "1.0.133"
 tokio = { version = "1.41.1", features = ["macros", "parking_lot", "rt-multi-thread", "tracing"] }
 tokio-postgres = { version = "0.7.12", features = ["with-serde_json-1"] }
-tower-http = { version = "0.6.1", features = ["cors"] }
+tower-http = { version = "0.6.2", features = ["cors"] }
 tower-service = "0.3.3"
 tracing = { version = "0.1.40", features = ["log", "release_max_level_info"] }
 unicase = { version = "2.8.0", features = ["nightly"] }

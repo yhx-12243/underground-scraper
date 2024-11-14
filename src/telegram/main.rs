@@ -38,7 +38,7 @@ struct Args {
         long,
         default_value_t = 192,
         value_name = "seconds",
-        help = "flood sleep threshold"
+        help = "Flood sleep threshold"
     )]
     flood_sleep_threshold: u32,
 }

@@ -120,7 +120,7 @@ pub async fn get_searched_peers(conn: &mut Client) -> DBResult<HashMap<UniCase<C
     while let Some(row) = stream.try_next().await? {
         let id = row.try_get(0)?;
         let name = row.try_get::<_, &str>(1)?;
-        result.insert(UniCase::new(CompactString::new(name)), id);
+        result.insert(UniCase::new(name.into()), id);
     }
     Ok(result)
 }

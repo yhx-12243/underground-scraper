@@ -1,4 +1,4 @@
-use compact_str::CompactString;
+use compact_str::{format_compact, CompactString};
 use either::Either::{self, Left, Right};
 use grammers_client::InvocationError;
 use grammers_mtsender::RpcError;
@@ -185,7 +185,10 @@ async fn access_channel(
 
     let peer = Channel {
         id,
-        name: chat.username().unwrap_or_else(|| chat.name()).into(),
+        name: chat
+            .username()
+            .or_else(|| chat.name())
+            .map_or_else(|| format_compact!("channel#{id}"), CompactString::new),
         access_hash: access_hash.unwrap_or(0),
         app_id: 0,
     };
