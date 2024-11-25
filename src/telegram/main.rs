@@ -1,9 +1,9 @@
 #![feature(
-    stmt_expr_attributes,
     future_join,
     integer_sign_cast,
     let_chains,
     ptr_sub_ptr,
+    stmt_expr_attributes,
     try_blocks,
     write_all_vectored,
     yeet_expr,

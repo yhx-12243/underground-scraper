@@ -1,7 +1,7 @@
 pub mod client;
 mod types;
 
-use futures_util::{StreamExt, stream::FuturesUnordered};
+use futures_util::{StreamExt, TryStreamExt, stream::FuturesUnordered};
 pub use types::BotCommand;
 
 use std::{
@@ -189,7 +189,7 @@ pub async fn fetch_content(
     let mut jumping = interval
         .is_some_and(|(min, max)| min > 1 && limit > 1 && (max - min).cast_unsigned() < limit - 1);
 
-    let mut iter = client.inner.iter_messages(packed);
+    let mut iter = client.inner.stream_messages(packed);
     let mut buffer = Vec::with_capacity(100);
     'outer: loop {
         let mut n_err = 0;
@@ -215,7 +215,7 @@ pub async fn fetch_content(
                     }
                     buffer.clear();
                 }
-                iter.next().await
+                iter.try_next().await
             };
             match item {
                 Ok(item) => break item,

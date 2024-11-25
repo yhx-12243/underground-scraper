@@ -21,7 +21,7 @@ index 4b98461..6f088ec 100644
              self.fetched += 1;
              Some(item)
 diff --git a/lib/grammers-mtsender/Cargo.toml b/lib/grammers-mtsender/Cargo.toml
-index a7d8ab5..af281e4 100644
+index a7d8ab5..40cfabc 100644
 --- a/lib/grammers-mtsender/Cargo.toml
 +++ b/lib/grammers-mtsender/Cargo.toml
 @@ -17,6 +17,7 @@ edition = "2021"
@@ -37,7 +37,7 @@ index a7d8ab5..af281e4 100644
  tokio = { version = "1.40.0", default-features = false, features = ["net", "io-util", "sync", "time"] }
  tokio-socks = { version = "0.5.2", optional = true }
 -hickory-resolver = { version = "0.24.1", optional = true }
-+hickory-resolver = { git = "https://github.com/hickory-dns/hickory-dns", optional = true }
++hickory-resolver = { version = "0.25.0-alpha.4", optional = true }
  url = { version = "2.5.2", optional = true }
  
  [dev-dependencies]

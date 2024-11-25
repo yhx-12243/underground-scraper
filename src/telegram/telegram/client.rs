@@ -6,6 +6,7 @@ use std::{
 };
 
 use dashmap::DashMap;
+use futures_util::StreamExt;
 use grammers_client::{
     Client as ClientInner, Config, InitParams, SignInError, Update, types::Message,
 };
@@ -128,8 +129,9 @@ impl Client {
         client: ClientInner,
         promises: Arc<DashMap<i64, oneshot::Sender<Message>, DefaultHashBuilder>>,
     ) {
-        loop {
-            match client.next_update().await {
+        let mut updates = client.update_stream();
+        while let Some(update) = updates.next().await {
+            match update {
                 Ok(Update::NewMessage(message)) => if !message.outgoing()
                     && let Some(ref peer) = message.raw.from_id
                     && let Some((_, sender)) = promises.remove(&Peer::from(peer.clone()).0)

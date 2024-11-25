@@ -77,7 +77,7 @@ impl SetLenExt for OsString {
         unsafe {
             use std::fmt::Display;
             let inner = core::ptr::NonNull::from(self).cast::<String>().as_mut();
-            let mut fmt = core::fmt::Formatter::new(inner);
+            let mut fmt = core::fmt::Formatter::new(inner, core::fmt::FormattingOptions::new());
             let _ = value.fmt(&mut fmt);
         }
     }
