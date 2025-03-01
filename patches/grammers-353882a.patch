@@ -1,0 +1,323 @@
+diff --git a/lib/grammers-client/src/types/iter_buffer.rs b/lib/grammers-client/src/types/iter_buffer.rs
+index 4b98461..6f088ec 100644
+--- a/lib/grammers-client/src/types/iter_buffer.rs
++++ b/lib/grammers-client/src/types/iter_buffer.rs
+@@ -59,7 +59,7 @@ impl<R, T> IterBuffer<R, T> {
+     ///
+     /// Data does not need to be fetched if the limit is reached or the buffer is empty and the
+     /// last chunk was reached.
+-    pub(crate) fn next_raw(&mut self) -> Option<Result<Option<T>, InvocationError>> {
++    pub fn next_raw(&mut self) -> Option<Result<Option<T>, InvocationError>> {
+         if self.limit_reached() || (self.buffer.is_empty() && self.last_chunk) {
+             Some(Ok(None))
+         } else {
+@@ -82,7 +82,7 @@ impl<R, T> IterBuffer<R, T> {
+     }
+ 
+     /// Pop a buffered item from the queue, and increment the amount of items fetched (returned).
+-    pub(crate) fn pop_item(&mut self) -> Option<T> {
++    pub fn pop_item(&mut self) -> Option<T> {
+         if let Some(item) = self.buffer.pop_front() {
+             self.fetched += 1;
+             Some(item)
+diff --git a/lib/grammers-crypto/Cargo.toml b/lib/grammers-crypto/Cargo.toml
+index 2f21e06..180a440 100644
+--- a/lib/grammers-crypto/Cargo.toml
++++ b/lib/grammers-crypto/Cargo.toml
+@@ -15,10 +15,10 @@ edition = "2024"
+ 
+ [dependencies]
+ aes = "0.8.4"
+-getrandom = "0.2.15"
++getrandom = "0.3.1"
+ glass_pumpkin = "1.7.0"
+ hmac = "0.12.1"
+-num-bigint = "0.4.6"
++num-bigint = "0.5"
+ pbkdf2 = "0.12.2"
+ sha1 = "0.10.6"
+ sha2 = "0.10.8"
+@@ -26,7 +26,7 @@ num-traits = "0.2.19"
+ ctr = "0.9.2"
+ 
+ [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+-getrandom = { version = "0.2.15", features = ["js"] }
++getrandom = { version = "0.3.1", features = ["wasm_js"] }
+ 
+ [dev-dependencies]
+ bencher = "0.1.5"
+diff --git a/lib/grammers-crypto/src/lib.rs b/lib/grammers-crypto/src/lib.rs
+index 2da81ef..f503700 100644
+--- a/lib/grammers-crypto/src/lib.rs
++++ b/lib/grammers-crypto/src/lib.rs
+@@ -20,7 +20,7 @@ pub mod two_factor_auth;
+ 
+ pub use auth_key::AuthKey;
+ pub use deque_buffer::DequeBuffer;
+-use getrandom::getrandom;
++use getrandom::fill;
+ use std::fmt;
+ 
+ #[derive(Clone, Debug, PartialEq)]
+@@ -142,7 +142,7 @@ fn do_encrypt_data_v2(buffer: &mut DequeBuffer<u8>, auth_key: &AuthKey, random_p
+ pub fn encrypt_data_v2(buffer: &mut DequeBuffer<u8>, auth_key: &AuthKey) {
+     let random_padding = {
+         let mut rnd = [0; 32];
+-        getrandom(&mut rnd).expect("failed to generate a secure padding");
++        fill(&mut rnd).expect("failed to generate a secure padding");
+         rnd
+     };
+ 
+@@ -224,7 +224,7 @@ pub fn encrypt_ige(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
+         padded.extend(plaintext);
+ 
+         let mut buffer = vec![0; pad_len];
+-        getrandom(&mut buffer).expect("failed to generate random padding for encryption");
++        fill(&mut buffer).expect("failed to generate random padding for encryption");
+         padded.extend(&buffer);
+         padded
+     };
+diff --git a/lib/grammers-mtproto/Cargo.toml b/lib/grammers-mtproto/Cargo.toml
+index 29ca475..dbef8ea 100644
+--- a/lib/grammers-mtproto/Cargo.toml
++++ b/lib/grammers-mtproto/Cargo.toml
+@@ -17,16 +17,16 @@ edition = "2024"
+ bytes = "1.7.1"
+ crc32fast = "1.4.2"
+ flate2 = "1.0.33"
+-getrandom = "0.2.15"
++getrandom = "0.3.1"
+ grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
+ grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features = ["tl-mtproto"] }
+ log = "0.4.22"
+-num-bigint = "0.4.6"
++num-bigint = "0.5"
+ sha1 = "0.10.6"
+ web-time = "1.1.0"
+ 
+ [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+-getrandom = { version = "0.2.15", features = ["js"] }
++getrandom = { version = "0.3.1", features = ["wasm_js"] }
+ 
+ [dev-dependencies]
+ toml = "0.8.19"
+diff --git a/lib/grammers-mtproto/src/authentication.rs b/lib/grammers-mtproto/src/authentication.rs
+index 6e791af..601fee0 100644
+--- a/lib/grammers-mtproto/src/authentication.rs
++++ b/lib/grammers-mtproto/src/authentication.rs
+@@ -32,7 +32,7 @@
+ //!     Ok(())
+ //! }
+ //! ```
+-use getrandom::getrandom;
++use getrandom::fill;
+ use grammers_crypto::hex;
+ use grammers_crypto::{AuthKey, factorize::factorize, rsa};
+ use grammers_tl_types::{self as tl, Cursor, Deserializable, RemoteCall, Serializable};
+@@ -214,7 +214,7 @@ pub struct Step3 {
+ pub fn step1() -> Result<(Vec<u8>, Step1), Error> {
+     let random_bytes = {
+         let mut buffer = [0; 16];
+-        getrandom(&mut buffer).expect("failed to generate secure data for auth key");
++        fill(&mut buffer).expect("failed to generate secure data for auth key");
+         buffer
+     };
+ 
+@@ -249,7 +249,7 @@ pub fn step2(data: Step1, response: &[u8]) -> Result<(Vec<u8>, Step2), Error> {
+ 
+     let random_bytes = {
+         let mut buffer = [0; 32 + 224];
+-        getrandom(&mut buffer).expect("failed to generate secure data for auth key");
++        fill(&mut buffer).expect("failed to generate secure data for auth key");
+         buffer
+     };
+ 
+@@ -378,7 +378,7 @@ pub fn step3(data: Step2, response: &[u8]) -> Result<(Vec<u8>, Step3), Error> {
+ 
+     let random_bytes = {
+         let mut buffer = [0; 256 + 16];
+-        getrandom(&mut buffer).expect("failed to generate secure data for auth key");
++        fill(&mut buffer).expect("failed to generate secure data for auth key");
+         buffer
+     };
+ 
+diff --git a/lib/grammers-mtproto/src/mtp/encrypted.rs b/lib/grammers-mtproto/src/mtp/encrypted.rs
+index 5a2a87f..704b8de 100644
+--- a/lib/grammers-mtproto/src/mtp/encrypted.rs
++++ b/lib/grammers-mtproto/src/mtp/encrypted.rs
+@@ -10,7 +10,7 @@ use super::{
+ };
+ use crate::utils::StackBuffer;
+ use crate::{MsgId, manual_tl};
+-use getrandom::getrandom;
++use getrandom::fill;
+ use grammers_crypto::{AuthKey, DequeBuffer, decrypt_data_v2, encrypt_data_v2};
+ use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
+ use log::info;
+@@ -137,7 +137,7 @@ impl Builder {
+             salt_request_msg_id: None,
+             client_id: {
+                 let mut buffer = [0u8; 8];
+-                getrandom(&mut buffer).expect("failed to generate a secure client_id");
++                fill(&mut buffer).expect("failed to generate a secure client_id");
+                 i64::from_le_bytes(buffer)
+             },
+             sequence: 0,
+@@ -1297,7 +1297,7 @@ impl Mtp for Encrypted {
+         log::info!("resetting mtp client id and related state");
+         self.client_id = {
+             let mut buffer = [0u8; 8];
+-            getrandom(&mut buffer).expect("failed to generate a secure client_id");
++            fill(&mut buffer).expect("failed to generate a secure client_id");
+             i64::from_le_bytes(buffer)
+         };
+         self.sequence = 0;
+diff --git a/lib/grammers-mtproto/src/transport/obfuscated.rs b/lib/grammers-mtproto/src/transport/obfuscated.rs
+index e1e9a30..41d39ed 100644
+--- a/lib/grammers-mtproto/src/transport/obfuscated.rs
++++ b/lib/grammers-mtproto/src/transport/obfuscated.rs
+@@ -48,7 +48,7 @@ impl<T: Transport + Tagged> Obfuscated<T> {
+             || init[0] == 0xef // Abridged
+             || FORBIDDEN_FIRST_INTS.iter().any(|start| start == &init[..4])
+         {
+-            getrandom::getrandom(&mut init).unwrap();
++            getrandom::fill(&mut init).unwrap();
+         }
+ 
+         init[56..60].copy_from_slice(&inner.init_tag());
+diff --git a/lib/grammers-mtsender/Cargo.toml b/lib/grammers-mtsender/Cargo.toml
+index 5fdd644..dc53236 100644
+--- a/lib/grammers-mtsender/Cargo.toml
++++ b/lib/grammers-mtsender/Cargo.toml
+@@ -17,6 +17,7 @@ edition = "2024"
+ proxy = ["tokio-socks", "hickory-resolver", "url"]
+ 
+ [dependencies]
++base64 = "0.22.1"
+ bytes = "1.7.1"
+ futures-util = { version = "0.3.30", default-features = false, features = [
+     "alloc"
+@@ -27,7 +28,7 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features
+ log = "0.4.22"
+ tokio = { version = "1.40.0", default-features = false, features = ["io-util", "sync", "time"] }
+ tokio-socks = { version = "0.5.2", optional = true }
+-hickory-resolver = { version = "0.24.1", optional = true }
++hickory-resolver = { version = "0.25.0-alpha.4", optional = true }
+ url = { version = "2.5.2", optional = true }
+ web-time = "1.1.0"
+ 
+diff --git a/lib/grammers-mtsender/src/net/tcp.rs b/lib/grammers-mtsender/src/net/tcp.rs
+index e306dbc..2cb3993 100644
+--- a/lib/grammers-mtsender/src/net/tcp.rs
++++ b/lib/grammers-mtsender/src/net/tcp.rs
+@@ -16,6 +16,8 @@ pub enum NetStream {
+     Tcp(TcpStream),
+     #[cfg(feature = "proxy")]
+     ProxySocks5(tokio_socks::tcp::Socks5Stream<TcpStream>),
++    #[cfg(feature = "proxy")]
++    ProxyHTTP(TcpStream),
+ }
+ 
+ impl NetStream {
+@@ -24,6 +26,8 @@ impl NetStream {
+             Self::Tcp(stream) => stream.split(),
+             #[cfg(feature = "proxy")]
+             Self::ProxySocks5(stream) => stream.split(),
++            #[cfg(feature = "proxy")]
++            Self::ProxyHTTP(stream) => stream.split(),
+         }
+     }
+ 
+@@ -83,21 +87,38 @@ impl NetStream {
+         };
+ 
+         match scheme {
+-            "socks5" => {
++            "socks5" => Ok(NetStream::ProxySocks5(
+                 if username.is_empty() {
+-                    Ok(NetStream::ProxySocks5(
+-                        tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
+-                            .await
+-                            .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+-                    ))
++                    tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr).await
++                } else {
++                    tokio_socks::tcp::Socks5Stream::connect_with_password(socks_addr, addr, username, password).await
++                }
++                .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
++            )),
++            "http" => {
++                use tokio::io::{AsyncReadExt, AsyncWriteExt};
++
++                let mut socket = TcpStream::connect(socks_addr).await?;
++                let mut head = format!("CONNECT {addr} HTTP/1.1\r\n\r\n");
++                if !username.is_empty() {
++                    use base64::Engine;
++
++                    let n = head.len() - 2;
++                    unsafe { head.as_mut_vec().set_len(n); }
++                    head.push_str("Proxy-Authorization: Basic ");
++                    base64::prelude::BASE64_STANDARD.encode_string(format!("{username}:{password}"), &mut head);
++                    head.push_str("\r\n\r\n");
++                }
++                socket.write_all(head.as_bytes()).await?;
++
++                let mut buf = [0u8; 39];
++                socket.read_exact(&mut buf).await?;
++                if buf == *b"HTTP/1.1 200 Connection established\r\n\r\n" {
++                    Ok(NetStream::ProxyHTTP(socket))
+                 } else {
+-                    Ok(NetStream::ProxySocks5(
+-                        tokio_socks::tcp::Socks5Stream::connect_with_password(
+-                            socks_addr, addr, username, password,
+-                        )
+-                        .await
+-                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+-                    ))
++                    "Response error: ".clone_into(&mut head);
++                    head.push_str(&String::from_utf8_lossy(&buf));
++                    Err(io::Error::new(ErrorKind::NotConnected, head))
+                 }
+             }
+             scheme => Err(io::Error::new(
+diff --git a/lib/grammers-session/src/lib.rs b/lib/grammers-session/src/lib.rs
+index 0b45fa6..d04b91e 100644
+--- a/lib/grammers-session/src/lib.rs
++++ b/lib/grammers-session/src/lib.rs
+@@ -16,8 +16,8 @@ pub use chat::{ChatHashCache, PackedChat, PackedType};
+ pub use generated::LAYER as VERSION;
+ pub use generated::types::UpdateState;
+ pub use generated::types::User;
+-use generated::{enums, types};
+-use grammers_tl_types::deserialize::Error as DeserializeError;
++pub use generated::{enums, types};
++pub use grammers_tl_types::deserialize::Error as DeserializeError;
+ pub use message_box::{Gap, MessageBox};
+ pub use message_box::{PrematureEndReason, channel_id};
+ use std::fmt;
+@@ -34,6 +34,14 @@ pub struct Session {
+     session: Mutex<types::Session>,
+ }
+ 
++impl From<types::Session> for Session {
++    fn from(session: types::Session) -> Self {
++        Self {
++            session: Mutex::new(session),
++        }
++    }
++}
++
+ #[allow(clippy::new_without_default)]
+ impl Session {
+     pub fn new() -> Self {
+@@ -158,6 +166,10 @@ impl Session {
+             .map(|enums::User::User(user)| user.clone())
+     }
+ 
++    pub fn get(&self) -> types::Session {
++        self.session.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
++    }
++
+     pub fn get_state(&self) -> Option<UpdateState> {
+         let session = self.session.lock().unwrap();
+         let enums::UpdateState::State(state) = session.state.clone()?;

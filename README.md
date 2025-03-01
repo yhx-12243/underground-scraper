@@ -22,7 +22,6 @@ The project has following requirements:
 
 * A Rust toolchain in a `nightly` version (not too old, 1.75+ is sufficient),
 * A [PostgreSQL](https://www.postgresql.org/) client (and server, if you don't have, v14+ is OK).
-* A [ChromeDriver](https://chromedriver.chromium.org/), listening on port 9515 (default), as new as possible (120+ is OK).
 * (Optional) A Python 3 running environment (3.10+ is OK).
 
 The other dependencies will download when building by *Cargo*, please keep the network connection well.
@@ -52,7 +51,7 @@ export RUST_LOG=info
 
 We have some patch files for some Rust third-party libraries, they lie in [`./patches/*.patch`](./patches) directory, **you should apply them before compiling**.
 
-If you don't know how to apply them, you can just run the script [`./apply_patch.py`](./apply_patch.py) **between `cargo fetch` and `cargo build`** to finish (although it may not be so robust but it usually works fine).
+If you don't know how to apply them, you can just run the script [`./apply_patch.py`](./apply_patch.py) **before `cargo build`** to finish (although it may not be so robust but it usually works fine).
 
 In addition, all the patch we write are mild (compatible), namely, any program can pass without patch will always pass with patch and produce the same result. For example, we only make some private interface public, or add some interfaces.
 
@@ -66,7 +65,7 @@ Plus, we will briefly describe the methodology of each scraper, in order to help
 
 First, you should run `cargo build [-r]` ([`-r` means release mode](https://doc.rust-lang.org/cargo/commands/cargo-build.html#option-cargo-build--r)) to build all of the binaries.
 
-If your build fails with errors, it's likely that you skipped [the step of patch applying](#patches) or did not perform it correctly, please check it out again.
+If your build fails with errors, it's likely that you skipped [the step of patch applying](#patches) or did not perform it correctly, please **run `cargo clean` first**, then check it out again.
 
 When the build succeeds, you can run `cargo run -r --bin <name> -- <args>` to start these scrapers. For convenience, we use `./foo <args>` to simply denote `cargo run -r --bin foo -- <args>` (of course you can copy the binary into working directory).
 
@@ -116,12 +115,14 @@ DROP SCHEMA IF EXISTS ezkify CASCADE;
 CREATE SCHEMA ezkify;
 
 CREATE TABLE ezkify.categories (
+    key text NOT NULL,
     id bigint NOT NULL,
     "desc" text NOT NULL,
-    PRIMARY KEY (id, "time"),
+    PRIMARY KEY (key, id),
 );
 
 CREATE TABLE ezkify.items (
+    key text NOT NULL,
     id bigint NOT NULL,
     "time" timestamp without time zone NOT NULL,
     category_id bigint NOT NULL,
@@ -130,8 +131,8 @@ CREATE TABLE ezkify.items (
     min_order bigint NOT NULL,
     max_order bigint NOT NULL,
     description text NOT NULL,
-    PRIMARY KEY (id, "time"),
-    FOREIGN KEY (category_id) REFERENCES ezkify.categories(id)
+    PRIMARY KEY (key, id, "time"),
+    FOREIGN KEY (key, category_id) REFERENCES ezkify.categories(key, id)
 );
 ```
 
@@ -178,7 +179,7 @@ CREATE TABLE blackhatworld.posts (
 ./blackhatworld
 ```
 
-This program is written by Rust with `fantoccini` (the Rust version of WebDriver), so you should launch your `chromedriver` (just default parameters, port 9515) before running.
+This program is written by Rust with `headless-chrome` (the Rust version of [Puppeteer](https://pptr.dev/)), so you should prepare a Chrome browser before running.
 
 Then you will see a Chrome page open. With a certain probability, the Chrome will popup a Cloudflare verifying page and you should solve it manually or refresh page several times.
 
@@ -202,7 +203,7 @@ The server also has the functions like "load balancing", different scrapers (wor
 
 ##### Usage
 
-We can use `./hackforums-inner` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward (like NGINX) it to a TCP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/hackforums-inner/main.rs#L55)[^1].
+We can use `./blackhatworld-server` to start the server. The server listen on the UNIX socket [`./underground-scraper.sock`](./underground-scraper.sock) by default and one can forward (like NGINX) it to a TCP port (localhost such as `127.0.0.1`) or directly modify the [code](./src/blackhatworld-server/main.rs#L56)[^1].
 
 [^1]: Anyway, as long as one can access the server in the same manner (TCP port / socket), then it will work. For example, the `blackhatworld-worker` uses the TCP port 18322 in localhost.
 
@@ -243,13 +244,38 @@ to start formal scraping (it's fascinating!) and checking whether your headers w
 
 ### Telegram
 
-#### Environment Variables
+#### Config file
+
+Since our Telegram Scraper supports parallel scraping in multi-account now, we use config file instead of building environment variables.
 
 See Telegram's [Apps](https://my.telegram.org/apps) page to register and get your `api_id` and `api_hash`.
 
-```sh
-export TG_ID=<telegram api_id>
-export TG_HASH=<telegram api_hash>
+Then you should create a file named `telegram/config.json` (it can changed in command line arguments in `./telegram`, see `./telegram --help`), with [following content](./telegram/config.json.example):
+
+```json
+[
+	{
+		"id": "api_id_1",
+		"hash": "api_hash_1"
+	},
+	{
+		"id": "api_id_2",
+		"hash": "api_hash_2",
+		"proxy": null
+	},
+	{
+		"id": "api_id_3",
+		"hash": "api_hash_3",
+		"proxy": "http://www.example.com/"
+	},
+	{
+		"id": "api_id_4",
+		"hash": "api_hash_4",
+		"proxy": "http://username:password@www.example.com/",
+		"session_file": 123456
+	},
+	...
+]
 ```
 
 #### SQL Schema
@@ -266,6 +292,7 @@ CREATE TABLE telegram.channel (
     max_message_id integer NOT NULL,
     access_hash bigint NOT NULL,
     last_fetch timestamp without time zone NOT NULL,
+    app_id integer NOT NULL,
     PRIMARY KEY (id)
 );
 
@@ -287,19 +314,39 @@ CREATE TABLE telegram.link (
 CREATE TABLE telegram.invite (
     hash text NOT NULL,
     channel_id bigint NOT NULL,
-    PRIMARY LEY (hash)
+    type "char" NOT NULL,
+    description text NOT NULL,
+    PRIMARY KEY (hash)
+);
+
+CREATE TABLE telegram.bots (
+    id bigint NOT NULL,
+    name text NOT NULL,
+    access_hash bigint NOT NULL,
+    app_id integer NOT NULL,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE telegram.interaction (
+    bot_id bigint NOT NULL,
+    message_id integer NOT NULL,
+    request text NOT NULL,
+    response jsonb NOT NULL,
+    PRIMARY KEY (bot_id, message_id)
 );
 
 CREATE INDEX ON telegram.channel (lower(name));
 
 CREATE INDEX ON telegram.message (channel_id, message_id);
+
+CREATE INDEX ON telegram.bots (lower(name));
 ```
 
 #### Usage
 
 First, you should collect channels/groups as many as possible. Run
 ```sh
-./telegram ping <channels, both id and username accepted>
+./telegram ping -c <channels, both id and username accepted>
 ```
 to add the credentials of the channels to the database.
 

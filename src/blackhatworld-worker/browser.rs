@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use headless_chrome::{
+    Tab,
     browser::tab::EventListener,
     protocol::cdp::{
-        types::Event,
         Network::{
             self,
             events::{RequestWillBeSentEvent, RequestWillBeSentExtraInfoEvent},
         },
+        types::Event,
     },
-    Tab,
 };
 use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
@@ -29,9 +29,7 @@ impl EventListener<Event> for NetworkListener {
             _ => return,
         };
 
-        let Some(Value::Object(ref headers)) = headers.0 else {
-            return;
-        };
+        let Some(Value::Object(ref headers)) = headers.0 else { return };
 
         let mut cookie = None;
         let mut user_agent = None;
@@ -44,7 +42,7 @@ impl EventListener<Event> for NetworkListener {
                 }
             }
         }
-        if let Some((cookie, user_agent)) = cookie.zip(user_agent) {
+        if let (Some(cookie), Some(user_agent)) = (cookie, user_agent) {
             let _ = self.tx.send(ConfigHeaders {
                 cookie: cookie.clone(),
                 user_agent: user_agent.clone(),

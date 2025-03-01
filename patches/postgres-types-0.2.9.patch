@@ -1,8 +1,8 @@
 diff --git a/src/lib.rs b/src/lib.rs
-index 52b5c77..d85f30e 100644
+index db044bc..a95b6f8 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -725,7 +725,7 @@ simple_from!(bool, bool_from_sql, BOOL);
+@@ -742,7 +742,7 @@ simple_from!(bool, bool_from_sql, BOOL);
  simple_from!(i8, char_from_sql, CHAR);
  simple_from!(i16, int2_from_sql, INT2);
  simple_from!(i32, int4_from_sql, INT4);

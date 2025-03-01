@@ -80,10 +80,12 @@ async fn main() -> anyhow::Result<()> {
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;
 
-    let driver = uscr::scrape::get_driver(false).await?;
+    let browser = uscr::scrape::puppeteer(false, None)?;
+
+    let tab = uscr::scrape::puppeteer::first_tab(&browser)?;
 
     let mut ctx = scrape::Context {
-        driver,
+        tab,
         cfg: Default::default(),
         reg_id: regex::Regex::new(r"js-threadListItem-(\d+)").unwrap(),
         sel_struct_item: scraper::Selector::parse(".structItem").unwrap(),
@@ -105,5 +107,5 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    ctx.driver.close().await.map_err(Into::into)
+    Ok(())
 }

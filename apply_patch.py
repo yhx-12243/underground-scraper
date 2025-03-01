@@ -100,7 +100,7 @@ def patch_cargo(identifier, patch, crates_io):
 def patch_git(identifier, patch, cargo_git):
     name, version = identifier.rsplit('-', 1)
     for d in cargo_git:
-        if d.name.startswith(name):
+        if d.name.startswith(name) and (d / version).is_dir():
             return (
                 f'\x1b[32m======== Applying \x1b[1;35m{identifier}\x1b[32m ========\x1b[0m',
                 patch_inner(patch, d / version),
@@ -124,10 +124,12 @@ def main():
         .decode()
     print(f'Use toolchain: \x1b[1;36m{toolchain}\x1b[0m\n')
 
+    run(['cargo', 'fetch'], cwd=workspace)
+
     stdlib = args.rustup_path / 'toolchains' / toolchain / 'lib/rustlib/src/rust/library'
     assert stdlib.is_dir()
 
-    crates_io = args.cargo_path / 'registry/src/index.crates.io-6f17d22bba15001f'
+    crates_io = args.cargo_path / 'registry/src/index.crates.io-1949cf8c6b5b557f'
     assert crates_io.is_dir()
 
     cargo_git_dir = args.cargo_path / 'git/checkouts'

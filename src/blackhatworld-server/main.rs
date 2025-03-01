@@ -1,4 +1,4 @@
-#![feature(hint_assert_unchecked, try_blocks)]
+#![feature(let_chains, never_type, try_blocks)]
 
 mod service;
 
@@ -25,40 +25,40 @@ async fn get_black_ids() -> impl Iterator<Item = i64> {
         .filter_map(|row| row.try_get(0).ok())
 }
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() -> std::io::Result<()> {
-    use actix_web::{web, App, HttpServer};
+    use axum::{
+        Router,
+        extract::DefaultBodyLimit,
+        routing::{get, post},
+        serve,
+    };
+    use tokio::net::UnixListener;
+    use tower_http::cors::CorsLayer;
+
+    const SOCK: &str = "underground-scraper.sock";
 
     pretty_env_logger::init_timed();
     uscr::db::init_db().await;
 
-    service::init(vec![], get_black_ids().await.collect());
+    service::init(Vec::new(), get_black_ids().await.collect());
 
-    let json_config = web::JsonConfig::default()
-        .content_type_required(false)
-        .limit(usize::MAX);
+    let app: Router = Router::new()
+        .route("/get", get(service::get))
+        .route("/get/black", get(service::get_black))
+        .route("/send", post(service::send))
+        .route("/send/black", post(service::send_black))
+        .layer(DefaultBodyLimit::disable())
+        .layer(CorsLayer::very_permissive().allow_private_network(true));
 
-    let server = HttpServer::new(move || {
-        let cors = actix_cors::Cors::default()
-            .allow_any_origin()
-            .allow_any_method()
-            .allow_any_header()
-            .allow_private_network_access();
+    if let Err(err) = std::fs::remove_file(SOCK) && err.kind() != std::io::ErrorKind::NotFound {
+        return Err(err);
+    }
 
-        App::new()
-            .app_data(json_config.clone())
-            .wrap(cors)
-            .service(service::get)
-            .service(service::get_black)
-            // .service(service::send)
-            .service(service::send_black)
-    });
-
-    server.bind_uds("underground-scraper.sock")?.run().await
+    serve(UnixListener::bind(SOCK)?, app).await
 }
 
 /*
-
 const dp = new DOMParser();
 const sleep = ms => new Promise(f => setTimeout(f, ms));
 

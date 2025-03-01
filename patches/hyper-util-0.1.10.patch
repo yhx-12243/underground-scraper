@@ -1,0 +1,22 @@
+diff --git a/src/client/legacy/connect/http.rs b/src/client/legacy/connect/http.rs
+index 05a19f4..00a0e53 100644
+--- a/src/client/legacy/connect/http.rs
++++ b/src/client/legacy/connect/http.rs
+@@ -641,8 +641,6 @@ struct ConnectingTcpRemote {
+ 
+ impl ConnectingTcpRemote {
+     fn new(addrs: dns::SocketAddrs, connect_timeout: Option<Duration>) -> Self {
+-        let connect_timeout = connect_timeout.and_then(|t| t.checked_div(addrs.len() as u32));
+-
+         Self {
+             addrs,
+             connect_timeout,
+@@ -654,7 +652,7 @@ impl ConnectingTcpRemote {
+     async fn connect(&mut self, config: &Config) -> Result<TcpStream, ConnectError> {
+         let mut err = None;
+         for addr in &mut self.addrs {
+-            debug!("connecting to {}", addr);
++            debug!("connecting to {} (timeout = {:?})", addr, self.connect_timeout);
+             match connect(&addr, config, self.connect_timeout)?.await {
+                 Ok(tcp) => {
+                     debug!("connected to {}", addr);

@@ -3,9 +3,9 @@ use std::{
     time::SystemTime,
 };
 
-use reqwest::{header::DATE, Client as Request};
+use reqwest::{Client as Request, header::DATE};
 use scraper::{Html, Selector};
-use uscr::db::{get_connection, BB8Error, ToSqlIter};
+use uscr::db::{BB8Error, ToSqlIter, get_connection};
 
 pub struct Context {
     pub client: Request,
@@ -47,27 +47,29 @@ pub async fn work(id: i64, c_desc: String, ctx: &Context) {
         }
     };
 
-    let fragment = Html::parse_fragment(&res);
-    let root = fragment.root_element();
     let mut archived = Vec::new();
-    for child in root.child_elements() {
-        let quantity = child
-            .attr("data-qty")
-            .and_then(|x| x.parse().ok())
-            .unwrap_or(0i64);
-        let cost = child
-            .attr("data-cost")
-            .and_then(|x| x.replace(',', ".").parse().ok())
-            .unwrap_or(0.0f64);
-        let desc = if let Some(d) = child.select(&ctx.sel_scp).next() {
-            d.text().map(str::trim).collect()
-        } else {
-            String::new()
-        };
+    {
+        let fragment = Html::parse_fragment(&res);
+        let root = fragment.root_element();
+        for child in root.child_elements() {
+            let quantity = child
+                .attr("data-qty")
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(0i64);
+            let cost = child
+                .attr("data-cost")
+                .and_then(|x| x.replace(',', ".").parse().ok())
+                .unwrap_or(0.0f64);
+            let desc = if let Some(d) = child.select(&ctx.sel_scp).next() {
+                d.text().map(str::trim).collect()
+            } else {
+                String::new()
+            };
 
-        let hash = BuildHasherDefault::<DefaultHasher>::default().hash_one(&desc);
+            let hash = BuildHasherDefault::<DefaultHasher>::default().hash_one(&desc);
 
-        archived.push((hash.cast_signed(), desc, quantity, cost));
+            archived.push((hash.cast_signed(), desc, quantity, cost));
+        }
     }
 
     if !archived.is_empty() {
@@ -76,17 +78,14 @@ pub async fn work(id: i64, c_desc: String, ctx: &Context) {
 
             let mut conn = get_connection().await?;
             let stmt = conn.prepare_static(SQL.into()).await?;
-            conn.execute(
-                &stmt,
-                &[
-                    &ToSqlIter(archived.iter().map(|x| x.0)),
-                    &id,
-                    &date,
-                    &ToSqlIter(archived.iter().map(|x| &*x.1)),
-                    &ToSqlIter(archived.iter().map(|x| x.2)),
-                    &ToSqlIter(archived.iter().map(|x| x.3)),
-                ],
-            )
+            conn.execute(&stmt, &[
+                &ToSqlIter(archived.iter().map(|x| x.0)),
+                &id,
+                &date,
+                &ToSqlIter(archived.iter().map(|x| &*x.1)),
+                &ToSqlIter(archived.iter().map(|x| x.2)),
+                &ToSqlIter(archived.iter().map(|x| x.3)),
+            ])
             .await?;
 
             tracing::info!(target: "worker", "\x1b[36m[#{id}] update {} items\x1b[0m", archived.len());

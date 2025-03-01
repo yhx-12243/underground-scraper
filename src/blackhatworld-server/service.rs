@@ -1,6 +1,6 @@
 use std::time::{Duration, SystemTime};
 
-use actix_web::{post, web::Json};
+use axum::Json;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use uscr::db::BB8Error;
@@ -20,7 +20,6 @@ pub fn remove(which: &Mutex<Vec<i64>>, id: i64) {
     }
 }
 
-#[actix_web::get("/get")]
 pub async fn get() -> Json<Vec<i64>> {
     let mut guard = IDS.lock();
     let ret = if guard.len() > 50 {
@@ -32,10 +31,9 @@ pub async fn get() -> Json<Vec<i64>> {
     Json(ret)
 }
 
-#[actix_web::get("/get/black")]
 pub async fn get_black() -> Json<Vec<i64>> {
     let mut guard = BIDS.lock();
-    let L = 50.min((guard.len() + 1) / 2);
+    let L = 50.min(guard.len().div_ceil(2));
     // SAFETY: (x + 1) / 2 <= x.
     unsafe {
         core::hint::assert_unchecked(L <= guard.len());
@@ -45,13 +43,12 @@ pub async fn get_black() -> Json<Vec<i64>> {
 }
 
 #[derive(Deserialize)]
-struct SendData {
+pub struct SendData {
     id: i64,
     date: u64,
     content: String,
 }
 
-#[post("/send")]
 pub async fn send(data: Json<SendData>) -> Json<String> {
     const SQL: &str =
         "insert into hackforums.content (id, create_time, content) values ($1, $2, $3)";
@@ -75,12 +72,11 @@ pub async fn send(data: Json<SendData>) -> Json<String> {
 }
 
 #[derive(Deserialize)]
-struct SendDataBlack {
+pub struct SendDataBlack {
     id: i64,
     content: String,
 }
 
-#[post("/send/black")]
 pub async fn send_black(data: Json<SendDataBlack>) -> Json<String> {
     const SQL: &str = "insert into blackhatworld.content (id, content) values ($1, $2)";
 

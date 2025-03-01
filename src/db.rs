@@ -1,9 +1,10 @@
 use core::fmt::Debug;
+use std::sync::OnceLock;
 
-use bb8_postgres::{bb8, PostgresConnectionManager};
+use bb8_postgres::{PostgresConnectionManager, bb8};
 use tokio_postgres::{
-    types::{to_sql_checked, FromSql, IsNull, Kind, ToSql, Type},
     NoTls, Row,
+    types::{FromSql, IsNull, Kind, ToSql, Type, to_sql_checked},
 };
 
 pub type ConnectionManager = PostgresConnectionManager<NoTls>;
@@ -13,7 +14,7 @@ pub type DBError = tokio_postgres::Error;
 pub type BB8Error = bb8::RunError<DBError>;
 pub type DBResult<T> = Result<T, DBError>;
 
-static mut POOL: Option<Pool> = None;
+static POOL: OnceLock<Pool> = OnceLock::new();
 
 mod constants {
     use core::time::Duration;
@@ -57,15 +58,12 @@ pub async fn init_db() {
         .await
         .unwrap();
 
-    unsafe {
-        assert!(POOL.is_none());
-        POOL = Some(pool);
-    }
+    POOL.set(pool).unwrap();
 }
 
 #[inline(always)]
 pub fn get_connection() -> impl Future<Output = Result<PooledConnection, BB8Error>> {
-    unsafe { POOL.as_ref().unwrap_unchecked().get() }
+    unsafe { POOL.get().unwrap_unchecked().get() }
 }
 
 #[inline(always)]
@@ -83,7 +81,7 @@ pub async fn insert_connection(
 pub fn transfer_type<'a, T, U>(row: &'a Row, idx: usize) -> DBResult<U>
 where
     T: FromSql<'a> + TryInto<U>,
-    <T as TryInto<U>>::Error: std::error::Error + Send + Sync + 'static,
+    <T as TryInto<U>>::Error: core::error::Error + Send + Sync + 'static,
 {
     row.try_get::<'a, usize, T>(idx)?
         .try_into()
@@ -95,7 +93,7 @@ pub struct JsonChecked<'a>(pub &'a [u8]);
 
 impl<'a> FromSql<'a> for JsonChecked<'a> {
     #[inline]
-    fn from_sql(_: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+    fn from_sql(_: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn core::error::Error + Sync + Send>> {
         if let [1, rest @ ..] = raw {
             Ok(Self(rest))
         } else {

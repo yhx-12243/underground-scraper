@@ -1,0 +1,23 @@
+[
+	{
+		"id": "api_id_1",
+		"hash": "api_hash_1"
+	},
+	{
+		"id": "api_id_2",
+		"hash": "api_hash_2",
+		"proxy": null
+	},
+	{
+		"id": "api_id_3",
+		"hash": "api_hash_3",
+		"proxy": "http://www.example.com/"
+	},
+	{
+		"id": "api_id_4",
+		"hash": "api_hash_4",
+		"proxy": "http://username:password@www.example.com/",
+		"session_file": 123456
+	},
+	...
+]

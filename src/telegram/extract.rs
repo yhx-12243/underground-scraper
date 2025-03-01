@@ -1,49 +1,38 @@
-use core::pin::pin;
 use std::{
-    cell::RefCell,
     fs::File,
-    io::{BufWriter, Write},
+    io::{BufWriter, IoSlice, Write},
+    pin::pin,
 };
 
 use compact_str::CompactString;
 use futures_util::TryStreamExt;
-use hashbrown::{
-    hash_set::{Entry, HashSet},
-    HashMap,
-};
-use tokio_postgres::{types::ToSql, Client};
+use hashbrown::{HashMap, hash_map::RawEntryMut, hash_set::HashSet};
+use tokio_postgres::{Client, types::ToSql};
+use unicase::UniCase;
 use uscr::{
-    db::{get_connection, BB8Error, DBResult, ToSqlIter},
-    util::xmax_to_success,
+    db::{DBError, DBResult, ToSqlIter, get_connection},
+    util::{box_io_error, xmax_to_success},
 };
 
 const fn idc(ch: u8) -> bool {
     matches!(ch, b'0'..=b'9' | b'A' ..= b'Z' | b'a' ..= b'z' | b'-' | b'_')
 }
 
-struct Saver {
-    dict: HashSet<CompactString>,
-    sf: BufWriter<File>,
-}
-
 pub struct Inspector {
-    dict: HashSet<CompactString>,
-    es: Vec<(i64, i32, CompactString)>,
-    map: HashMap<CompactString, i64>,
+    dict: HashSet<UniCase<CompactString>>,
+    es: Vec<(i64, i32, UniCase<CompactString>)>,
+    map: HashMap<UniCase<CompactString>, i64>,
 
-    saver: RefCell<Saver>,
+    saver: BufWriter<File>,
 }
 
 impl Inspector {
-    pub fn new(map: HashMap<CompactString, i64>, file: File) -> Self {
+    pub fn new(map: HashMap<UniCase<CompactString>, i64>, file: File) -> Self {
         Self {
             dict: HashSet::new(),
             es: Vec::new(),
             map,
-            saver: RefCell::new(Saver {
-                dict: HashSet::new(),
-                sf: BufWriter::new(file),
-            }),
+            saver: BufWriter::new(file),
         }
     }
 
@@ -84,58 +73,44 @@ impl Inspector {
                 .iter()
                 .position(|ch| !idc(*ch))
                 .unwrap_or(suffix.len());
-            let mut result =
+            let result = UniCase::new(
                 // SAFETY: suffix[len] is ASCII, which is UTF-8 boundary.
-                unsafe { CompactString::from_utf8_unchecked(suffix.get_unchecked(..len)) };
+                unsafe { CompactString::from_utf8_unchecked(suffix.get_unchecked(..len)) },
+            );
 
-            match self.dict.entry(result) {
-                Entry::Occupied(e) => result = e.into_key().unwrap(),
-                Entry::Vacant(e) => {
-                    let prefix =
-                        // SAFETY: the position of suffix is UTF-8 boundary.
-                        unsafe { text.get_unchecked(idx..suffix.as_ptr().sub_ptr(text.as_ptr())) };
-                    tracing::info!(target: "telegram-extractor", "found: https://\x1b[33m{}\x1b[36m{}\x1b[0m", prefix, e.get());
-                    result = e.get().clone();
-                    e.insert();
-                }
+            if let RawEntryMut::Vacant(e) = self.dict.raw_entry_mut().from_key(&result) {
+                let prefix =
+                    // SAFETY: the position of suffix is UTF-8 boundary.
+                    unsafe { text.get_unchecked(idx..suffix.as_ptr().offset_from_unsigned(text.as_ptr())) };
+                tracing::info!(target: "telegram-extractor", "found: https://\x1b[33m{prefix}\x1b[36m{result}\x1b[0m");
+                e.insert(result.clone(), ());
             }
 
             self.es.push((channel_id, message_id, result));
         }
     }
 
-    async fn commit(&self, data: &[(i64, i32, CompactString)], conn: &mut Client) -> DBResult<()> {
+    async fn commit(&mut self, conn: &mut Client) -> DBResult<()> {
         const SQL: &str = "with tmp_insert(c1, m, c2) as (select * from unnest($1::bigint[], $2::integer[], $3::bigint[])) insert into telegram.link (c1, message_id, c2) select c1, m, c2 from tmp_insert on conflict (c1, message_id, c2) do nothing returning xmax";
 
-        if data.is_empty() {
-            return Ok(());
+        let mut batch = Vec::with_capacity(self.es.len());
+        for (channel_id, message_id, result) in core::mem::take(&mut self.es) {
+            if let Some(&id2) = self.map.get(&result) && channel_id != id2 { // self reference
+                batch.push((channel_id, message_id, id2));
+            }
         }
 
-        let mut batch = Vec::with_capacity(data.len());
-        {
-            let mut saver = self.saver.borrow_mut();
-            for (channel_id, message_id, result) in data {
-                if let Some(id2) = self.map.get(result) {
-                    if channel_id != id2 {
-                        batch.push((channel_id, message_id, id2));
-                    }
-                } else if saver.dict.insert(result.clone()) {
-                    let _ = saver.sf.write_all(result.as_bytes());
-                    let _ = saver.sf.write_all(b"\n");
-                }
-            }
+        if batch.is_empty() {
+            return Ok(());
         }
 
         let stmt = conn.prepare_static(SQL.into()).await?;
         let rows = conn
-            .query(
-                &stmt,
-                &[
-                    &ToSqlIter(batch.iter().map(|x| x.0)),
-                    &ToSqlIter(batch.iter().map(|x| x.1)),
-                    &ToSqlIter(batch.iter().map(|x| x.2)),
-                ],
-            )
+            .query(&stmt, &[
+                &ToSqlIter(batch.iter().map(|x| x.0)),
+                &ToSqlIter(batch.iter().map(|x| x.1)),
+                &ToSqlIter(batch.iter().map(|x| x.2)),
+            ])
             .await?;
 
         tracing::info!(target: "telegram-committer", "\x1b[32m{}\x1b[0m/\x1b[33m{}\x1b[0m links added.", xmax_to_success(rows.iter()), batch.len());
@@ -143,55 +118,34 @@ impl Inspector {
         Ok(())
     }
 
-    pub async fn extract_content(&mut self) -> Result<(), uscr::db::BB8Error> {
+    pub async fn extract_content(&mut self, conn: &mut Client) -> Result<(), uscr::db::BB8Error> {
         const SQL: &str = "select channel_id, message_id, data->>'message' from telegram.message where data->>'message' like '%t%'";
 
-        let mut conn = get_connection().await?;
-        let mut conn2 = get_connection().await?;
-        let stmt = conn.prepare_static(SQL.into()).await?;
-        let stream = conn
-            .query_raw(&stmt, core::iter::empty::<&dyn ToSql>())
-            .await?;
+        let mut conn_bg = get_connection().await?;
+        let stmt = conn_bg.prepare_static(SQL.into()).await?;
+        let stream = conn_bg.query_raw(&stmt, core::iter::empty::<&dyn ToSql>()).await?;
         let mut stream = pin!(stream);
 
         let mut cnt = 0;
         while let Some(row) = stream.try_next().await? {
-            if let Ok(channel_id) = row.try_get(0)
-                && let Ok(message_id) = row.try_get(1)
-                && let Ok(content) = row.try_get(2)
-            {
+            if let Ok(channel_id) = row.try_get(0) && let Ok(message_id) = row.try_get(1) && let Ok(content) = row.try_get(2) {
                 self.inspect(channel_id, message_id, content);
             }
             cnt += 1;
             if cnt % 65536 == 0 {
-                self.commit(&self.es, &mut conn2).await?;
+                self.commit(conn).await?;
                 self.es.clear();
             }
         }
 
-        self.commit(&self.es, &mut conn2).await.map_err(Into::into)
+        self.commit(conn).await?;
+
+        for id in &self.dict {
+            self.saver
+                .write_all_vectored(&mut [IoSlice::new(id.as_bytes()), IoSlice::new(b"\n")])
+                .map_err(|e| DBError::new(tokio_postgres::error::Kind::Io, Some(box_io_error(e))))?;
+        }
+
+        Ok(())
     }
-}
-
-pub async fn generate_user_id_map() -> Result<HashMap<CompactString, i64>, BB8Error> {
-    const SQL1: &str = "select channel_id, hash from telegram.invite";
-    const SQL2: &str = "select id, name from telegram.channel";
-
-    let mut conn = get_connection().await?;
-    let stmt = conn.prepare_static(SQL1.into()).await?;
-    let rows = conn.query(&stmt, &[]).await?;
-    let iter1 = rows.into_iter();
-
-    let stmt = conn.prepare_static(SQL2.into()).await?;
-    let rows = conn.query(&stmt, &[]).await?;
-    let iter2 = rows.into_iter();
-
-    Ok(iter1
-        .chain(iter2)
-        .filter_map(|row| {
-            let id = row.try_get(0).ok()?;
-            let name = row.try_get::<_, &str>(1).ok()?;
-            Some((name.into(), id))
-        })
-        .collect())
 }

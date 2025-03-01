@@ -1,50 +1,80 @@
 use std::{
-    io::{self, stdin, stdout, Write as _},
-    path::{Path, PathBuf},
+    io::{self, BufRead, Write, stdin, stdout},
+    os::fd::{AsFd, AsRawFd},
+    path::PathBuf,
+    sync::Arc,
 };
 
-use grammers_client::{Client as ClientInner, Config, InitParams, SignInError};
+use dashmap::DashMap;
+use grammers_client::{
+    Client as ClientInner, Config, InitParams, SignInError, Update, types::Message,
+};
+use grammers_mtsender::AuthorizationError;
 use grammers_session::Session;
-use hashbrown::HashMap;
+use hashbrown::{DefaultHashBuilder, HashMap};
+use serde::Deserialize;
+use tokio::{sync::oneshot, task::JoinHandle};
 
+use super::types::Peer;
+
+#[derive(Deserialize)]
+pub struct InitConfig {
+    pub id: i32,
+    pub hash: String,
+    pub proxy: Option<String>,
+    pub session_file: Option<i32>,
+}
+
+#[derive(Debug)]
 pub struct Client {
     pub inner: ClientInner,
+    promises: Arc<DashMap<i64, oneshot::Sender<Message>, DefaultHashBuilder>>,
+    listen_fut: Option<JoinHandle<()>>,
     session_path: PathBuf,
 }
 
 impl Client {
     pub async fn new(
-        session_path: &Path,
+        session_path: PathBuf,
         api_id: i32,
         api_hash: String,
+        proxy_url: Option<String>,
         flood_sleep_threshold: u32,
-    ) -> io::Result<Self> {
+    ) -> Result<(Self, bool), AuthorizationError> {
         let config = Config {
-            session: Session::load_file_or_create(session_path)?,
+            session: Session::load_file_or_create(&session_path)?,
             api_id,
             api_hash,
             params: InitParams {
                 flood_sleep_threshold,
+                proxy_url,
                 ..InitParams::default()
             },
         };
 
-        match ClientInner::connect(config).await {
-            Ok(inner) => Ok(Self {
+        let inner = ClientInner::connect(config).await?;
+        let is_authorized = inner.is_authorized().await?;
+
+        Ok((
+            Self {
                 inner,
-                session_path: session_path.to_path_buf(),
-            }),
-            Err(err) => Err(io::Error::other(err)),
-        }
+                promises: Arc::default(),
+                listen_fut: None,
+                session_path,
+            },
+            is_authorized,
+        ))
     }
 
-    pub async fn login(&self) -> io::Result<()> {
+    pub async fn login(&self, hid: i32) -> io::Result<()> {
         let mut phone = String::with_capacity(32);
         while !self.inner.is_authorized().await.map_err(io::Error::other)? {
             if phone.is_empty() {
-                let mut stdout = stdout();
-                stdout.write_all(b"Please enter your phone: ")?;
-                stdout.flush()?;
+                {
+                    let mut stdout = stdout().lock();
+                    write!(stdout, "[{hid}] Please enter your phone: ")?;
+                    stdout.flush()?;
+                }
                 stdin().read_line(&mut phone)?;
             }
             let token = self
@@ -55,24 +85,30 @@ impl Client {
 
             let mut code = String::with_capacity(32);
             {
-                let mut stdout = stdout();
-                stdout.write_all(b"Please enter the code you received: ")?;
+                let mut stdout = stdout().lock();
+                write!(stdout, "[{hid}] Please enter the code you received: ")?;
                 stdout.flush()?;
-                stdin().read_line(&mut code)?;
             }
+            stdin().read_line(&mut code)?;
             match self.inner.sign_in(&token, code.trim()).await {
                 Ok(_) => (),
                 Err(SignInError::PasswordRequired(password_token)) => {
-                    let password = {
-                        let mut stdout = stdout();
+                    {
+                        let mut stdout = stdout().lock();
                         if let Some(hint) = password_token.hint() {
-                            write!(stdout, "Please enter your password (hint: {hint}): ")
+                            write!(stdout, "[{hid}] Please enter your password (hint: {hint}): ")
                         } else {
-                            stdout.write_all(b"Please enter your password: ")
+                            write!(stdout, "[{hid}] Please enter your password: ")
                         }?;
                         stdout.flush()?;
-                        rpassword::read_password_from_bufread(&mut stdin().lock())
-                    }?;
+                    }
+                    let mut password = String::with_capacity(32);
+                    {
+                        let mut stdin = stdin().lock();
+                        let fd = stdin.as_fd().as_raw_fd();
+                        let _hi = rpassword::HiddenInput::new(fd);
+                        stdin.read_line(&mut password)?;
+                    }
                     self.inner
                         .check_password(password_token, password.trim())
                         .await
@@ -87,43 +123,99 @@ impl Client {
     pub fn save(&self) -> io::Result<()> {
         self.inner.session().save_to_file(&*self.session_path)
     }
+
+    async fn listen_inner(
+        client: ClientInner,
+        promises: Arc<DashMap<i64, oneshot::Sender<Message>, DefaultHashBuilder>>,
+    ) {
+        loop {
+            match client.next_update().await {
+                Ok(Update::NewMessage(message)) => if !message.outgoing()
+                    && let Some(ref peer) = message.raw.from_id
+                    && let Some((_, sender)) = promises.remove(&Peer::from(peer.clone()).0)
+                    && let Err(e) = sender.send(message) {
+                    tracing::info!(target: "telegram-listener", "error sending message: {e:?}");
+                }
+                Err(e) => tracing::info!(target: "telegram-listener", "error receiving message: {e:?}"),
+                _ => (),
+            }
+        }
+    }
+
+    pub fn register(&self, id: i64, sender: oneshot::Sender<Message>) {
+        self.promises.insert(id, sender);
+    }
+
+    pub fn start_listen(&mut self) {
+        if self.listen_fut.is_none() {
+            let fut = Self::listen_inner(self.inner.clone(), self.promises.clone());
+            self.listen_fut = Some(tokio::spawn(fut));
+        }
+    }
+
+    pub fn stop_listen(&mut self) {
+        if let Some(handle) = self.listen_fut.take() {
+            handle.abort();
+        }
+    }
 }
 
 pub async fn init_clients_from_map(
-    map: HashMap<i32, String>,
+    mut configs: Vec<InitConfig>,
     mut session_dir: PathBuf,
     flood_sleep_threshold: u32,
 ) -> HashMap<i32, Client> {
     use uscr::util::SetLenExt;
 
-    let mut clients = HashMap::with_capacity(map.len());
+    let mut clients = HashMap::with_capacity(configs.len());
     let dir_len = session_dir.as_os_str().len();
-    for (id, hash) in map {
+
+    let client_futures = configs.iter_mut().map(|init_config| {
+        let api_id = init_config.id;
         unsafe {
             session_dir.set_len(dir_len);
         }
-        session_dir.append_i32(id);
+        let session_file = init_config.session_file.unwrap_or(api_id);
+        session_dir.append_i32(session_file);
 
-        let client = match Client::new(&session_dir, id, hash, flood_sleep_threshold).await {
+        Client::new(
+            session_dir.clone(),
+            api_id,
+            core::mem::take(&mut init_config.hash),
+            init_config.proxy.take(),
+            flood_sleep_threshold,
+        )
+    });
+
+    let client_resolve = futures_util::future::join_all(client_futures).await;
+
+    for (init_config, try_client) in configs.into_iter().zip(client_resolve) {
+        let api_id = init_config.id;
+        let (client, is_authorized) = match try_client {
             Ok(c) => c,
             Err(e) => {
-                tracing::error!(target: "client-setup(get_client)", id, ?e);
+                tracing::error!(target: "client-setup(get_client)", api_id, ?e);
                 continue;
             }
         };
-        if let Err(e) = client.login().await {
-            tracing::error!(target: "client-setup(login)", id, ?e);
-            continue;
+        let session_file = init_config.session_file.unwrap_or(api_id);
+        if !is_authorized {
+            if let Err(e) = client.login(session_file).await {
+                tracing::error!(target: "client-setup(login)", api_id, ?e);
+                continue;
+            }
         }
         if let Err(e) = client.save() {
-            tracing::error!(target: "client-setup(save)", id, ?e);
+            tracing::error!(target: "client-setup(save)", api_id, ?e);
             continue;
         }
-        eprintln!(
-            "\x1b[33m{id}\x1b[0m => \x1b[36m{:#?}\x1b[0m",
-            client.inner.session().get()
-        );
-        clients.insert_unique_unchecked(id, client);
+        match clients.try_insert(session_file, client) {
+            Ok(client) => tracing::info!(target: "client-setup(insert)",
+                "\x1b[33m{api_id}\x1b[0m (key: \x1b[32m{session_file}\x1b[0m) => \x1b[36m{:?}\x1b[0m",
+                client.inner.session().get(),
+            ),
+            Err(e) => tracing::error!(target: "client-setup(insert)", api_id, ?e),
+        }
     }
     clients
 }

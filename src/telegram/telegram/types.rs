@@ -26,7 +26,8 @@ impl From<tl::enums::KeyboardButton> for Button {
             | KeyboardButton::InputKeyboardButtonUserProfile(tl::types::InputKeyboardButtonUserProfile { text, .. })
             | KeyboardButton::UserProfile(tl::types::KeyboardButtonUserProfile { text, .. })
             | KeyboardButton::RequestPeer(tl::types::KeyboardButtonRequestPeer { text, .. })
-            | KeyboardButton::InputKeyboardButtonRequestPeer(tl::types::InputKeyboardButtonRequestPeer { text, .. }) => Self { text, url: None },
+            | KeyboardButton::InputKeyboardButtonRequestPeer(tl::types::InputKeyboardButtonRequestPeer { text, .. })
+            | KeyboardButton::Copy(tl::types::KeyboardButtonCopy { text, .. }) => Self { text, url: None },
             | KeyboardButton::WebView(tl::types::KeyboardButtonWebView { text, url })
             | KeyboardButton::SimpleWebView(tl::types::KeyboardButtonSimpleWebView { text, url })
             | KeyboardButton::Url(tl::types::KeyboardButtonUrl { text, url })
@@ -60,6 +61,23 @@ impl From<tl::enums::ReplyMarkup> for ReplyMarkup {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[repr(transparent)]
+pub struct Peer(pub i64);
+
+impl From<tl::enums::Peer> for Peer {
+    fn from(peer: tl::enums::Peer) -> Self {
+        use tl::{
+            enums::Peer,
+            types::{PeerChannel, PeerChat, PeerUser},
+        };
+        let (Peer::Channel(PeerChannel { channel_id: id })
+        | Peer::Chat(PeerChat { chat_id: id })
+        | Peer::User(PeerUser { user_id: id })) = peer;
+        Self(id)
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Message {
     pub out: bool,
@@ -75,11 +93,11 @@ pub struct Message {
     pub invert_media: bool,
     pub offline: bool,
     pub id: i32,
-    pub from_id: Option<i64>,
+    pub from_id: Option<Peer>,
     pub from_boosts_applied: Option<i32>,
-    pub peer_id: (),               // crate::enums::Peer,
-    pub saved_peer_id: Option<()>, // Option<crate::enums::Peer>,
-    pub fwd_from: Option<()>,      // Option<crate::enums::MessageFwdHeader>,
+    pub peer_id: Peer,
+    pub saved_peer_id: Option<Peer>,
+    pub fwd_from: Option<()>, // Option<crate::enums::MessageFwdHeader>,
     pub via_bot_id: Option<i64>,
     pub via_business_bot_id: Option<i64>,
     pub reply_to: Option<()>, // Option<crate::enums::MessageReplyHeader>,
@@ -117,19 +135,10 @@ impl From<tl::types::Message> for Message {
             invert_media: message.invert_media,
             offline: message.offline,
             id: message.id,
-            from_id: message.from_id.map(|peer| {
-                use tl::{
-                    enums::Peer,
-                    types::{PeerChannel, PeerChat, PeerUser},
-                };
-                let (Peer::Channel(PeerChannel { channel_id: id })
-                | Peer::Chat(PeerChat { chat_id: id })
-                | Peer::User(PeerUser { user_id: id })) = peer;
-                id
-            }),
+            from_id: message.from_id.map(Into::into),
             from_boosts_applied: message.from_boosts_applied,
-            peer_id: (),
-            saved_peer_id: message.saved_peer_id.map(|_| ()),
+            peer_id: message.peer_id.into(),
+            saved_peer_id: message.saved_peer_id.map(Into::into),
             fwd_from: message.fwd_from.map(|_| ()),
             via_bot_id: message.via_bot_id,
             via_business_bot_id: message.via_business_bot_id,
@@ -153,6 +162,21 @@ impl From<tl::types::Message> for Message {
                 .map(|reason| reason.into_iter().map(|_| ()).collect()),
             ttl_period: message.ttl_period,
             quick_reply_shortcut_id: message.quick_reply_shortcut_id,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct BotCommand {
+    pub command: String,
+    pub description: String,
+}
+
+impl From<tl::enums::BotCommand> for BotCommand {
+    fn from(tl::enums::BotCommand::Command(cmd): tl::enums::BotCommand) -> Self {
+        Self {
+            command: cmd.command,
+            description: cmd.description,
         }
     }
 }

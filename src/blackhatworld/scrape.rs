@@ -1,18 +1,20 @@
 use std::{
     ops::ControlFlow,
+    sync::Arc,
     time::{Duration, SystemTime},
 };
 
-use fantoccini::{Client as Driver, Locator};
+use headless_chrome::Tab;
 use regex::Regex;
 use scraper::{Html, Selector};
 use uscr::{
-    db::{get_connection, BB8Error, ToSqlIter},
+    db::{BB8Error, ToSqlIter, get_connection},
+    scrape::puppeteer,
     util::xmax_to_success,
 };
 
 pub struct Context {
-    pub driver: Driver,
+    pub tab: Arc<Tab>,
     pub cfg: (&'static str, i64),
     pub reg_id: Regex,
     pub sel_struct_item: Selector,
@@ -32,12 +34,13 @@ pub struct Post {
     pub lastReply: SystemTime,
 }
 
-fn _pa(x: &str) -> Option<i64> {
-    x.replace('K', "000").replace('M', "000000").parse().ok()
-}
-
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::used_underscore_items)]
 pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
+    #[inline]
+    fn _pa(x: String) -> Option<i64> {
+        x.replace('K', "000").replace('M', "000000").parse().ok()
+    }
+
     tracing::info!(target: "worker", "[Forum \x1b[33m{}\x1b[0m] [Page \x1b[32m#{page}\x1b[0m] start", ctx.cfg.0);
 
     let url = format!(
@@ -45,18 +48,17 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
         ctx.cfg.0, ctx.cfg.1,
     );
 
-    if let Err(e) = ctx.driver.goto(&url).await {
+    if let Err(e) = puppeteer::navigate_to(&ctx.tab, url.into()).await {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
         return ControlFlow::Continue(());
     }
 
-    let locator = Locator::Css(".js-threadList");
-    if let Err(e) = ctx.driver.wait().forever().for_element(locator).await {
+    if let Err(e) = puppeteer::wait_for_async(&ctx.tab, ".js-threadList".into()).await {
         tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
         return ControlFlow::Continue(());
     }
 
-    let list = match ctx.driver.find(Locator::Css(".structItemContainer")).await {
+    let list = match puppeteer::find_async(&ctx.tab, ".structItemContainer".into()).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
@@ -64,7 +66,7 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
         }
     };
 
-    let html = match list.html(false).await {
+    let html = match puppeteer::outer_html(&list).await {
         Ok(t) => t,
         Err(e) => {
             tracing::warn!(target: "worker", "[Page #{page}] err: {e:?}");
@@ -72,57 +74,59 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
         }
     };
 
-    let fragment = Html::parse_fragment(&html);
-    let res = fragment
-        .select(&ctx.sel_struct_item)
-        .filter_map(|entry| {
-            let c = entry.child_elements().next_chunk::<4>().ok()?;
+    let res = {
+        let fragment = Html::parse_fragment(&html);
+        fragment
+            .select(&ctx.sel_struct_item)
+            .filter_map(|entry| {
+                let c = entry.child_elements().next_chunk::<4>().ok()?;
 
-            let id = ctx
-                .reg_id
-                .captures(entry.attr("class")?)?
-                .get(1)?
-                .as_str()
-                .parse()
-                .ok()?;
-            let author = entry.attr("data-author")?.to_owned();
-            let title = c[1]
-                .select(&ctx.sel_title)
-                .next()?
-                .text()
-                .map(str::trim)
-                .collect();
-            let time = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
-                c[1].select(&ctx.sel_udt)
-                    .next()?
-                    .attr("data-time")?
+                let id = ctx
+                    .reg_id
+                    .captures(entry.attr("class")?)?
+                    .get(1)?
+                    .as_str()
                     .parse()
-                    .ok()?,
-            ))?;
-
-            let mut dd = c[2].select(&ctx.sel_dd);
-            let replies = _pa(&dd.next()?.text().map(str::trim).collect::<String>())?;
-            let views = _pa(&dd.next()?.text().map(str::trim).collect::<String>())?;
-
-            let lastReply = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
-                c[3].select(&ctx.sel_udt)
+                    .ok()?;
+                let author = entry.attr("data-author")?.to_owned();
+                let title = c[1]
+                    .select(&ctx.sel_title)
                     .next()?
-                    .attr("data-time")?
-                    .parse()
-                    .ok()?,
-            ))?;
+                    .text()
+                    .map(str::trim)
+                    .collect();
+                let time = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
+                    c[1].select(&ctx.sel_udt)
+                        .next()?
+                        .attr("data-time")?
+                        .parse()
+                        .ok()?,
+                ))?;
 
-            Some(Post {
-                id,
-                author,
-                title,
-                time,
-                replies,
-                views,
-                lastReply,
+                let mut dd = c[2].select(&ctx.sel_dd);
+                let replies = _pa(dd.next()?.text().map(str::trim).collect())?;
+                let views = _pa(dd.next()?.text().map(str::trim).collect())?;
+
+                let lastReply = SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(
+                    c[3].select(&ctx.sel_udt)
+                        .next()?
+                        .attr("data-time")?
+                        .parse()
+                        .ok()?,
+                ))?;
+
+                Some(Post {
+                    id,
+                    author,
+                    title,
+                    time,
+                    replies,
+                    views,
+                    lastReply,
+                })
             })
-        })
-        .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    };
 
     if !res.is_empty() {
         let res: Result<(), BB8Error> = try {
@@ -131,19 +135,16 @@ pub async fn work(page: i32, ctx: &Context) -> ControlFlow<(), ()> {
             let mut conn = get_connection().await?;
             let stmt = conn.prepare_static(SQL.into()).await?;
             let rows = conn
-                .query(
-                    &stmt,
-                    &[
-                        &ctx.cfg.1,
-                        &ToSqlIter(res.iter().map(|x| x.id)),
-                        &ToSqlIter(res.iter().map(|x| &*x.author)),
-                        &ToSqlIter(res.iter().map(|x| &*x.title)),
-                        &ToSqlIter(res.iter().map(|x| x.time)),
-                        &ToSqlIter(res.iter().map(|x| x.replies)),
-                        &ToSqlIter(res.iter().map(|x| x.views)),
-                        &ToSqlIter(res.iter().map(|x| x.lastReply)),
-                    ],
-                )
+                .query(&stmt, &[
+                    &ctx.cfg.1,
+                    &ToSqlIter(res.iter().map(|x| x.id)),
+                    &ToSqlIter(res.iter().map(|x| &*x.author)),
+                    &ToSqlIter(res.iter().map(|x| &*x.title)),
+                    &ToSqlIter(res.iter().map(|x| x.time)),
+                    &ToSqlIter(res.iter().map(|x| x.replies)),
+                    &ToSqlIter(res.iter().map(|x| x.views)),
+                    &ToSqlIter(res.iter().map(|x| x.lastReply)),
+                ])
                 .await?;
 
             let n_rows = xmax_to_success(rows.iter());

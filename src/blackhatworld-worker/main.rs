@@ -1,4 +1,4 @@
-#![feature(fn_traits, let_chains, try_blocks, unboxed_closures)]
+#![feature(try_blocks)]
 
 mod browser;
 mod worker;
@@ -46,8 +46,6 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    let client = uscr::scrape::basic()?;
-
     match args.command {
         Commands::Config { port } => {
             let browser = uscr::scrape::puppeteer(
@@ -55,25 +53,11 @@ async fn main() -> anyhow::Result<()> {
                 PROXY_HOST.map(|host| format!("http://{host}:{port}")),
             )?;
 
-            let tab = {
-                let tabs_guard = browser
-                    .get_tabs()
-                    .lock()
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
-                let (first, remains) = tabs_guard
-                    .split_first()
-                    .ok_or_else(|| anyhow::anyhow!("no tabs found"))?;
-
-                for remain in remains {
-                    remain.close(true)?;
-                }
-
-                first.clone()
-            };
+            let tab = uscr::scrape::puppeteer::first_tab(&browser)?;
 
             let user_agent = {
-                use rand::seq::SliceRandom;
-                let mut thread_rng = rand::thread_rng();
+                use rand::seq::IndexedRandom;
+                let mut thread_rng = rand::rng();
                 *uscr::scrape::USER_AGENTS
                     .choose(&mut thread_rng)
                     .ok_or_else(|| anyhow::anyhow!("no UA available"))?
@@ -110,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
             config,
             port: server_port,
         } => {
+            let client = uscr::scrape::simple();
             let file = std::fs::File::open(config)?;
             let reader = std::io::BufReader::new(file);
             let config = serde_json::from_reader::<_, WorkConfig>(reader)?;

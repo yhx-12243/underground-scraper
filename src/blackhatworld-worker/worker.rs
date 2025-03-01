@@ -1,10 +1,10 @@
 use core::time::Duration;
 
-use compact_str::{format_compact, CompactString};
-use rand::{thread_rng, Rng};
+use compact_str::{CompactString, format_compact};
+use rand::random_range;
 use reqwest::{
-    header::{HeaderValue, COOKIE},
     Client, Proxy, Version,
+    header::{COOKIE, HeaderValue},
 };
 use serde::Serialize;
 
@@ -67,9 +67,7 @@ impl Worker {
         let client =
             client
                 .default_headers(
-                    if let Ok(cookie) =
-                        HeaderValue::try_from(core::mem::take(&mut self.headers.cookie))
-                    {
+                    if let Ok(cookie) = HeaderValue::try_from(core::mem::take(&mut self.headers.cookie)) {
                         Some((COOKIE, cookie))
                     } else {
                         None
@@ -80,7 +78,6 @@ impl Worker {
                 .user_agent(core::mem::take(&mut self.headers.user_agent))
                 .build()?;
         let target = format_compact!("worker-{}", self.client_port);
-        let mut rng = thread_rng();
 
         loop {
             let works = loop {
@@ -97,7 +94,6 @@ impl Worker {
             }
             for work in works {
                 let url = format!("https://www.blackhatworld.com/seo/{work}");
-                // let url = format!("https://localhost:4433/{work}");
                 log::info!(target: &target, "\x1b[33mscraping\x1b[0m {url} ...");
 
                 let response: reqwest::Result<String> = try {
@@ -127,8 +123,7 @@ impl Worker {
                                 }
                             }
                         }
-                        let t = rng.gen_range(2400..3000);
-                        Duration::from_millis(t)
+                        Duration::from_millis(random_range(2400..3000))
                     }
                     Ok(text) => {
                         log::warn!(target: &target, "\x1b[31mwrong\x1b[0m {url}: {text}");
