@@ -545,9 +545,9 @@ dependencies = [
 
 [[package]]
 name = "dashmap"
-version = "7.0.0-rc1"
+version = "7.0.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48a6edd990d414379eca12f1828fc7cb2e64927987b75aa2df2383e0e88c2543"
+checksum = "e4a1e35a65fe0538a60167f0ada6e195ad5d477f6ddae273943596d4a1a5730b"
 dependencies = [
  "cfg-if",
  "crossbeam-utils",
