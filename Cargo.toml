@@ -52,7 +52,12 @@ non_snake_case = { level = "allow", priority = 1 }
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+# restriction = { level = "warn", priority = -2 }
+
 absolute_paths = { level = "allow", priority = 1 }
+allow_attributes = { level = "allow", priority = 1 }
+allow_attributes_without_reason = { level = "allow", priority = 1 }
+arbitrary_source_item_ordering = { level = "allow", priority = 1 }
 arithmetic_side_effects = { level = "allow", priority = 1 }
 as_conversions = { level = "allow", priority = 1 }
 # cast_lossless = { level = "allow", priority = 1 } # u32 -> u64
@@ -95,6 +100,7 @@ std_instead_of_core = { level = "allow", priority = 1 }
 string_add = { level = "allow", priority = 1 }
 string_slice = { level = "allow", priority = 1 }
 unseparated_literal_suffix = { level = "allow", priority = 1 }
+unused_trait_names = { level = "allow", priority = 1 }
 wildcard_enum_match_arm = { level = "allow", priority = 1 }
 
 [[bin]]

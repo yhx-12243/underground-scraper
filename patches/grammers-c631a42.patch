@@ -21,7 +21,7 @@ index 4b98461..6f088ec 100644
              self.fetched += 1;
              Some(item)
 diff --git a/lib/grammers-crypto/Cargo.toml b/lib/grammers-crypto/Cargo.toml
-index 2f21e06..180a440 100644
+index 2f21e06..d9de914 100644
 --- a/lib/grammers-crypto/Cargo.toml
 +++ b/lib/grammers-crypto/Cargo.toml
 @@ -15,10 +15,10 @@ edition = "2024"
@@ -33,7 +33,7 @@ index 2f21e06..180a440 100644
  glass_pumpkin = "1.7.0"
  hmac = "0.12.1"
 -num-bigint = "0.4.6"
-+num-bigint = "0.5"
++num-bigint = "0.5.0-pre"
  pbkdf2 = "0.12.2"
  sha1 = "0.10.6"
  sha2 = "0.10.8"
@@ -78,7 +78,7 @@ index 2da81ef..f503700 100644
          padded
      };
 diff --git a/lib/grammers-mtproto/Cargo.toml b/lib/grammers-mtproto/Cargo.toml
-index 29ca475..dbef8ea 100644
+index 29ca475..7f9065b 100644
 --- a/lib/grammers-mtproto/Cargo.toml
 +++ b/lib/grammers-mtproto/Cargo.toml
 @@ -17,16 +17,16 @@ edition = "2024"
@@ -91,7 +91,7 @@ index 29ca475..dbef8ea 100644
  grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features = ["tl-mtproto"] }
  log = "0.4.22"
 -num-bigint = "0.4.6"
-+num-bigint = "0.5"
++num-bigint = "0.5.0-pre"
  sha1 = "0.10.6"
  web-time = "1.1.0"
  
