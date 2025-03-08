@@ -15,7 +15,7 @@ clap = { version = "4.5.31", features = ["derive", "unicode", "wrap_help", "env"
 clap_derive = { version = "4.5.28", features = ["unstable-v5"] }
 compact_str = { version = "0.9.0", features = ["serde"] }
 dashmap = { version = "7.0.0-rc1", features = ["inline-more", "raw-api"] }
-either = "1.13.0"
+either = "1.15.0"
 futures-util = { version = "0.3.30", features = ["unstable"] }
 grammers-client = { git = "https://github.com/Lonami/grammers", features = ["parse_invite_link", "proxy"] }
 grammers-mtsender = { git = "https://github.com/Lonami/grammers" }
