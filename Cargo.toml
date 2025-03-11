@@ -33,7 +33,7 @@ postgres-protocol = "0.6.8"
 pretty_env_logger = "0.5.0"
 rand = { version = "0.9.0", features = ["log", "nightly"] }
 regex = { version = "1.11.1", features = ["unstable"] }
-reqwest = { version = "0.12.12", default-features = false, features = ["http2", "json", "native-tls-alpn"] }
+reqwest = { version = "0.12.13", default-features = false, features = ["http2", "json", "native-tls-alpn"] }
 rpassword = "7.3.1"
 scraper = { version = "0.23.1", default-features = false }
 serde = { version = "1.0.219", features = ["derive"] }
