@@ -1081,7 +1081,7 @@ dependencies = [
  "base64",
  "derive_builder",
  "log",
- "rand 0.9.0",
+ "rand 0.9.1",
  "regex",
  "serde",
  "serde_json",
@@ -1959,7 +1959,7 @@ dependencies = [
  "hmac",
  "md-5",
  "memchr",
- "rand 0.9.0",
+ "rand 0.9.1",
  "sha2",
  "stringprep",
 ]
@@ -2039,14 +2039,13 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
+checksum = "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97"
 dependencies = [
  "log",
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
- "zerocopy",
 ]
 
 [[package]]
@@ -2778,7 +2777,7 @@ dependencies = [
  "pin-project-lite",
  "postgres-protocol",
  "postgres-types",
- "rand 0.9.0",
+ "rand 0.9.1",
  "socket2",
  "tokio",
  "tokio-util",
@@ -2911,7 +2910,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.9.0",
+ "rand 0.9.1",
  "sha1",
  "thiserror 2.0.12",
  "utf-8",
@@ -2950,7 +2949,7 @@ dependencies = [
  "parking_lot",
  "postgres-protocol",
  "pretty_env_logger",
- "rand 0.9.0",
+ "rand 0.9.1",
  "regex",
  "reqwest",
  "rpassword",
