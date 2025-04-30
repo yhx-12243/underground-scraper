@@ -21,7 +21,7 @@ grammers-client = { git = "https://github.com/Lonami/grammers", features = ["par
 grammers-mtsender = { git = "https://github.com/Lonami/grammers" }
 grammers-session = { git = "https://github.com/Lonami/grammers" }
 grammers-tl-types = { git = "https://github.com/Lonami/grammers" }
-hashbrown = { version = "0.15.2", features = ["serde"] }
+hashbrown = { version = "0.15.3", features = ["serde"] }
 headless_chrome = "1.0.17"
 httpdate = "1.0.3"
 hyper = { version = "1.6.0", features = ["nightly"] }
