@@ -25,7 +25,7 @@ hashbrown = { version = "0.15.3", features = ["serde"] }
 headless_chrome = "1.0.17"
 httpdate = "1.0.3"
 hyper = { version = "1.6.0", features = ["nightly"] }
-hyper-util = "0.1.11"
+hyper-util = "0.1.12"
 # indicatif = { version = "0.17.8", features = ["improved_unicode"] }
 log = { version = "0.4.27", features = ["release_max_level_info"] }
 parking_lot = "0.12.2"
