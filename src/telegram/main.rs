@@ -1,7 +1,7 @@
 #![feature(
     future_join,
-    let_chains,
     stmt_expr_attributes,
+    super_let,
     try_blocks,
     write_all_vectored,
     yeet_expr,
@@ -150,13 +150,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            let stmt_get_range;
-            let stmt_insert_msg;
-            let stmt_upd_minmax;
             let db = {
-                stmt_get_range = conn.prepare_static("select min_message_id, max_message_id from telegram.channel where id = $1".into()).await?;
-                stmt_insert_msg = conn.prepare_static("with tmp_insert(m, d) as (select * from unnest($1::integer[], $3::jsonb[])) insert into telegram.message (id, message_id, channel_id, data) select ($2::bigint << 32) | m, m, $2, d from tmp_insert on conflict (id) do update set message_id = excluded.message_id, channel_id = excluded.channel_id, data = excluded.data returning xmax".into()).await?;
-                stmt_upd_minmax = conn.prepare_static("update telegram.channel set min_message_id = $1, max_message_id = $2, last_fetch = now() at time zone 'UTC' where id = $3".into()).await?;
+                super let stmt_get_range = conn.prepare_static("select min_message_id, max_message_id from telegram.channel where id = $1".into()).await?;
+                super let stmt_insert_msg = conn.prepare_static("with tmp_insert(m, d) as (select * from unnest($1::integer[], $3::jsonb[])) insert into telegram.message (id, message_id, channel_id, data) select ($2::bigint << 32) | m, m, $2, d from tmp_insert on conflict (id) do update set message_id = excluded.message_id, channel_id = excluded.channel_id, data = excluded.data returning xmax".into()).await?;
+                super let stmt_upd_minmax = conn.prepare_static("update telegram.channel set min_message_id = $1, max_message_id = $2, last_fetch = now() at time zone 'UTC' where id = $3".into()).await?;
 
                 db::DBWrapper {
                     conn: &conn,

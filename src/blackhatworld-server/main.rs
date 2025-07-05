@@ -1,4 +1,4 @@
-#![feature(let_chains, never_type, try_blocks)]
+#![feature(never_type, try_blocks)]
 
 mod service;
 

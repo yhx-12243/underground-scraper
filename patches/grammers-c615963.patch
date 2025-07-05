@@ -142,7 +142,7 @@ index 6e791af..601fee0 100644
      };
  
 diff --git a/lib/grammers-mtproto/src/mtp/encrypted.rs b/lib/grammers-mtproto/src/mtp/encrypted.rs
-index 5a2a87f..704b8de 100644
+index 0757e8d..9543040 100644
 --- a/lib/grammers-mtproto/src/mtp/encrypted.rs
 +++ b/lib/grammers-mtproto/src/mtp/encrypted.rs
 @@ -10,7 +10,7 @@ use super::{
@@ -163,7 +163,7 @@ index 5a2a87f..704b8de 100644
                  i64::from_le_bytes(buffer)
              },
              sequence: 0,
-@@ -1297,7 +1297,7 @@ impl Mtp for Encrypted {
+@@ -1302,7 +1302,7 @@ impl Mtp for Encrypted {
          log::info!("resetting mtp client id and related state");
          self.client_id = {
              let mut buffer = [0u8; 8];
@@ -186,7 +186,7 @@ index e1e9a30..41d39ed 100644
  
          init[56..60].copy_from_slice(&inner.init_tag());
 diff --git a/lib/grammers-mtsender/Cargo.toml b/lib/grammers-mtsender/Cargo.toml
-index 5fdd644..00face5 100644
+index 1ce4764..014c78d 100644
 --- a/lib/grammers-mtsender/Cargo.toml
 +++ b/lib/grammers-mtsender/Cargo.toml
 @@ -17,6 +17,7 @@ edition = "2024"
@@ -197,12 +197,12 @@ index 5fdd644..00face5 100644
  bytes = "1.7.1"
  futures-util = { version = "0.3.30", default-features = false, features = [
      "alloc"
-@@ -27,7 +28,7 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features
+@@ -28,7 +29,7 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features
  log = "0.4.22"
  tokio = { version = "1.40.0", default-features = false, features = ["io-util", "sync", "time"] }
  tokio-socks = { version = "0.5.2", optional = true }
 -hickory-resolver = { version = "0.24.1", optional = true }
-+hickory-resolver = { version = "0.25.1", optional = true }
++hickory-resolver = { version = "0.25.2", optional = true }
  url = { version = "2.5.2", optional = true }
  web-time = "1.1.0"
  
@@ -281,7 +281,7 @@ index e306dbc..2cb3993 100644
              }
              scheme => Err(io::Error::new(
 diff --git a/lib/grammers-session/src/lib.rs b/lib/grammers-session/src/lib.rs
-index 0b45fa6..d04b91e 100644
+index 18f3a8e..d7ae10a 100644
 --- a/lib/grammers-session/src/lib.rs
 +++ b/lib/grammers-session/src/lib.rs
 @@ -16,8 +16,8 @@ pub use chat::{ChatHashCache, PackedChat, PackedType};
@@ -292,8 +292,8 @@ index 0b45fa6..d04b91e 100644
 -use grammers_tl_types::deserialize::Error as DeserializeError;
 +pub use generated::{enums, types};
 +pub use grammers_tl_types::deserialize::Error as DeserializeError;
- pub use message_box::{Gap, MessageBox};
- pub use message_box::{PrematureEndReason, channel_id};
+ pub use message_box::PrematureEndReason;
+ pub use message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike, peer_from_input_peer};
  use std::fmt;
 @@ -34,6 +34,14 @@ pub struct Session {
      session: Mutex<types::Session>,
@@ -310,7 +310,7 @@ index 0b45fa6..d04b91e 100644
  #[allow(clippy::new_without_default)]
  impl Session {
      pub fn new() -> Self {
-@@ -158,6 +166,10 @@ impl Session {
+@@ -159,6 +167,10 @@ impl Session {
              .map(|enums::User::User(user)| user.clone())
      }
  

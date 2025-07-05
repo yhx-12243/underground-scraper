@@ -11,8 +11,8 @@ anyhow = { version = "1.0.98", features = ["backtrace"] }
 axum = "0.8.4"
 bb8-postgres = { version = "0.9.0", features = ["with-serde_json-1"] }
 bytes = { version = "1.10.1", features = ["serde"] }
-clap = { version = "4.5.37", features = ["derive", "unicode", "wrap_help", "env", "string", "unstable-v5"] }
-clap_derive = { version = "4.5.32", features = ["unstable-v5"] }
+clap = { version = "4.5.40", features = ["derive", "unicode", "wrap_help", "env", "string", "unstable-v5"] }
+clap_derive = { version = "4.5.40", features = ["unstable-v5"] }
 compact_str = { version = "0.9.0", features = ["serde"] }
 dashmap = { version = "7.0.0-rc2", features = ["inline-more", "raw-api"] }
 either = "1.15.0"
@@ -21,26 +21,26 @@ grammers-client = { git = "https://github.com/Lonami/grammers", features = ["par
 grammers-mtsender = { git = "https://github.com/Lonami/grammers" }
 grammers-session = { git = "https://github.com/Lonami/grammers" }
 grammers-tl-types = { git = "https://github.com/Lonami/grammers" }
-hashbrown = { version = "0.15.3", features = ["serde"] }
+hashbrown = { version = "0.15.4", features = ["serde"] }
 headless_chrome = "1.0.17"
 httpdate = "1.0.3"
 hyper = { version = "1.6.0", features = ["nightly"] }
-hyper-util = "0.1.11"
+hyper-util = "0.1.14"
 # indicatif = { version = "0.17.8", features = ["improved_unicode"] }
 log = { version = "0.4.27", features = ["release_max_level_info"] }
-parking_lot = "0.12.2"
+parking_lot = "0.12.4"
 postgres-protocol = "0.6.8"
 pretty_env_logger = "0.5.0"
 rand = { version = "0.9.1", features = ["log", "nightly"] }
 regex = { version = "1.11.1", features = ["unstable"] }
-reqwest = { version = "0.12.15", default-features = false, features = ["http2", "json", "native-tls-alpn"] }
+reqwest = { version = "0.12.22", default-features = false, features = ["http2", "json", "native-tls-alpn"] }
 rpassword = "7.4.0"
 scraper = { version = "0.23.1", default-features = false }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-tokio = { version = "1.45.0", features = ["macros", "parking_lot", "rt-multi-thread", "tracing"] }
+tokio = { version = "1.46.1", features = ["macros", "parking_lot", "rt-multi-thread", "tracing"] }
 tokio-postgres = { version = "0.7.13", features = ["with-serde_json-1"] }
-tower-http = { version = "0.6.3", features = ["cors"] }
+tower-http = { version = "0.6.6", features = ["cors"] }
 tower-service = "0.3.3"
 tracing = { version = "0.1.41", features = ["log", "release_max_level_info"] }
 unicase = { version = "2.8.1", features = ["nightly"] }

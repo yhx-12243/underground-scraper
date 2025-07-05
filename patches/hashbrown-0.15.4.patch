@@ -1,8 +1,8 @@
 diff --git a/src/lib.rs b/src/lib.rs
-index 5b5d185..992b0f9 100644
+index e79da83..b45df80 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -64,7 +64,7 @@ doc_comment::doctest!("../README.md");
+@@ -71,7 +71,7 @@ doc_comment::doctest!("../README.md");
  mod macros;
  
  mod control;
@@ -43,7 +43,7 @@ index 480ebdb..baec2f3 100644
  ///
  /// See the [`HashMap::raw_entry_mut`] docs for usage examples.
 diff --git a/src/table.rs b/src/table.rs
-index 7f665b7..4e0ca3d 100644
+index 2565f6f..85297e2 100644
 --- a/src/table.rs
 +++ b/src/table.rs
 @@ -48,7 +48,7 @@ pub struct HashTable<T, A = Global>
