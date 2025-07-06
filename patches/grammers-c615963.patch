@@ -207,7 +207,7 @@ index 1ce4764..014c78d 100644
  web-time = "1.1.0"
  
 diff --git a/lib/grammers-mtsender/src/net/tcp.rs b/lib/grammers-mtsender/src/net/tcp.rs
-index e306dbc..2cb3993 100644
+index e306dbc..ebc41eb 100644
 --- a/lib/grammers-mtsender/src/net/tcp.rs
 +++ b/lib/grammers-mtsender/src/net/tcp.rs
 @@ -16,6 +16,8 @@ pub enum NetStream {
@@ -228,6 +228,24 @@ index e306dbc..2cb3993 100644
          }
      }
  
+@@ -49,7 +53,7 @@ impl NetStream {
+         };
+ 
+         use hickory_resolver::{
+-            AsyncResolver,
++            TokioResolver,
+             config::{ResolverConfig, ResolverOpts},
+         };
+         use url::Host;
+@@ -70,7 +74,7 @@ impl NetStream {
+         let socks_addr = match host {
+             Host::Domain(domain) => {
+                 let resolver =
+-                    AsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
++                    TokioResolver::builder_tokio().unwrap().build();
+                 let response = resolver.lookup_ip(domain).await?;
+                 let socks_ip_addr = response.into_iter().next().ok_or(io::Error::new(
+                     ErrorKind::NotFound,
 @@ -83,21 +87,38 @@ impl NetStream {
          };
  
